@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class RAGEvaluator:
-    def __init__(self, model_name:str = "llama3.2:1b", embed_model:str = "nomic-embed-text"):
+    def __init__(self, model_name:str = "llama3.2:3b", embed_model:str = "nomic-embed-text"):
         self.model_name = model_name
         self.db_manager = CloudVectorStoreManager()
         self.eval_llm = ChatOllama(model=model_name)
