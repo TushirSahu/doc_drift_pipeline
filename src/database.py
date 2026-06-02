@@ -65,7 +65,7 @@ class CloudVectorStoreManager:
         query_embedding = self.embedder.get_embeddings(query)
         search_result = self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_embedding,
+            query=query_embedding,
             limit=limit
-        )
+        ).points
         return [hit.payload['text'] for hit in search_result if 'text' in hit.payload]        
