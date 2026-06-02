@@ -1,76 +1,37 @@
-# Documentation Drift Detection Pipeline
+# 🚀 DocDrift: Automated Documentation Drift Detection
 
-An LLMOps system designed to detect semantic drift in technical documentation. It works by generating synthetic QA pairs from your documentation and evaluating Retrieval-Augmented Generation (RAG) performance using standard quality metrics.
+> An LLMOps pipeline designed to detect semantic drift in technical documentation before it breaks your production RAG systems.
 
-## Overview
+DocDrift automates the validation of technical documentation. It ingests new documentation, generates synthetic ground-truth data, and runs a localized Retrieval-Augmented Generation (RAG) evaluation to ensure your AI systems can still accurately interpret your updated docs.
 
-This pipeline automatically validates technical documentation to ensure it stays up-to-date. Key capabilities include:
-- **Data Synthesis**: Generates synthetic QA pairs directly from text using Ollama.
-- **Vector Retrieval**: Performs semantic similarity searches to retrieve relevant context using Qdrant.
-- **Metric Evaluation**: Uses RAGAS to strictly score answers on *Faithfulness*, *Relevancy*, and *Precision*.
-- **Drift Alerting**: Flags documentation when it becomes outdated or misaligned with expected answers.
+## ✨ Core Capabilities
 
-## Tech Stack
+* **Synthetic Data Generation:** Automatically generates high-quality QA pairs directly from raw markdown using local LLMs.
+* **Semantic Vector Retrieval:** Embeds and retrieves context using modern dense vector search via Qdrant Cloud.
+* **Continuous LLM Evaluation:** Strictly scores RAG performance using the **Ragas** framework to monitor *Faithfulness*, *Answer Relevancy*, and *Context Precision*.
+* **CI/CD Integration Ready:** Designed to run in automated pipelines (like GitHub Actions) to block Pull Requests if documentation updates cause RAG performance to drop below acceptable thresholds.
 
-- **Vector Database**: Qdrant
-- **LLM**: Ollama (`llama3`)
-- **Embeddings**: Local dense embeddings (e.g., `nomic-embed-text`)
-- **Evaluation**: RAGAS
-- **Framework**: LangChain
+## 🛠️ Tech Stack
 
-## Quick Start
+* **Orchestration:** LangChain
+* **Evaluation Framework:** Ragas
+* **Vector Database:** Qdrant Cloud
+* **Local LLM Engine:** Ollama (`llama3.2:1b`)
+* **Embedding Model:** Nomic AI (`nomic-embed-text`)
 
-### 1. Installation
+---
 
-Clone the repository and set up a virtual environment:
+## 🚀 Quick Start
+
+### 1. Environment Setup
+
+Clone the repository and spin up a clean, isolated environment to prevent dependency conflicts:
 
 ```bash
-git clone https://github.com/TushirSahu/doc_drift_pipeline.git
+git clone [https://github.com/TushirSahu/doc_drift_pipeline.git](https://github.com/TushirSahu/doc_drift_pipeline.git)
 cd doc_drift_pipeline
 
-python3 -m venv .venv
-source .venv/bin/activate
+conda create -n doc-drift python=3.11 -y
+conda activate doc-drift
 
 pip install -r requirements.txt
-```
-
-### 2. Configuration
-
-Create a `.env` file with your Qdrant configuration:
-
-```bash
-echo "QDRANT_URL=http://localhost:6333" > .env
-echo "QDRANT_API_KEY=your_key" >> .env
-```
-
-### 3. Execution
-
-Ensure your Ollama service is running in the background with your target model:
-
-```bash
-ollama run llama3
-```
-
-Run the main pipeline:
-
-```bash
-python pipeline.py
-```
-
-## Output Example
-
-```text
-==================================================
-EVALUATION RESULTS
-==================================================
-Faithfulness Score      : 87.50%
-Answer Relevancy        : 92.30%
-Context Precision       : 88.75%
-```
-
-## Repository Structure
-
-- `src/database.py`: Qdrant vector store management and semantic search
-- `src/generator.py`: Synthetic QA pair generation via Ollama
-- `src/evaluator.py`: RAG evaluation using RAGAS metrics
-- `pipeline.py`: Main execution and orchestration logic
