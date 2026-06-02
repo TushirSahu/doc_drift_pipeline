@@ -72,6 +72,6 @@ class RAGEvaluator:
             dataset=hf_dataset,
             metrics=[faithfulness, answer_relevancy, context_precision],
             llm=self.eval_llm,
-            embedding_model=self.eval_embeddings
+            embeddings=self.eval_embeddings
         )
         return result
