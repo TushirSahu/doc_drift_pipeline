@@ -25,7 +25,7 @@ class RAGEvaluator:
         self.eval_llm = ChatOllama(model=model_name)
         self.eval_embeddings = OllamaEmbeddings(model=embed_model)
 
-    def generate_rag_answers(self, questions: list, context: str) -> str:
+    def generate_rag_answers(self, question: str, contexts: list) -> str:
         context_str = "\n".join(contexts)
         prompt = f"""
         Answer the question using ONLY the provided context. If you don't know, say 'I don't know'.
@@ -55,13 +55,13 @@ class RAGEvaluator:
             question = pair[0]
             ground_truth = pair[2]
 
-            contexts = self.db_manager.retrieve_relevant_context(question, limit=2)
+            retrieved_contexts = self.db_manager.query_similarity(question, limit=2)
 
-            answers = self.generate_rag_answers(question, contexts)
+            generated_answer = self.generate_rag_answers(question, retrieved_contexts)
 
             data_for_eval["question"].append(question)
-            data_for_eval["answer"].append(answers)
-            data_for_eval["context"].append(contexts)
+            data_for_eval["answer"].append(generated_answer)
+            data_for_eval["context"].append(retrieved_contexts)
             data_for_eval["ground_truth"].append(ground_truth)
 
         

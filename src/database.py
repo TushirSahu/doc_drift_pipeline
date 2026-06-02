@@ -62,7 +62,7 @@ class CloudVectorStoreManager:
         return len(chunks)
 
     def query_similarity(self,query:str, limit:int =3):
-        query_embedding = self.embedder.get_embedding(query)
+        query_embedding = self.embedder.get_embeddings(query)
         search_result = self.client.search(
             collection_name=self.collection_name,
             query_vector=query_embedding,
