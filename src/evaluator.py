@@ -8,6 +8,7 @@ sys.modules["langchain_community.chat_models.vertexai"] = dummy_chat
 import pandas as pd
 from datasets import Dataset
 from ollama import chat
+from ragas import RunConfig
 from ragas import evaluate
 from ragas.metrics import faithfulness, answer_relevancy, context_precision
 from langchain_ollama import ChatOllama
