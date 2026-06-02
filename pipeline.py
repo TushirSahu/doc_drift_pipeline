@@ -42,6 +42,7 @@ def main():
 
     logger.info("Scanning for documentation files...")
     markdown_files = glob.glob("data/*.md")
+    logger.info(f"Found {len(markdown_files)} markdown files for ingestion.")
     
     if not markdown_files:
         logger.error("No markdown files found in /data directory. Exiting.")
