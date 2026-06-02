@@ -42,36 +42,38 @@ class RAGEvaluator:
         return response.message.content
 
     def run_evaluation(self, questions: list, contexts: list, answers: list) -> dict:
-        logger.info("Running RAG evaluation...")
+            logger.info("Running RAG evaluation...")
 
-        data_for_eval = {
-            "question": [],
-            "answer": [],
-            "context": [],
-            "ground_truth": []
-        }
+            # 🚨 Use the modern Ragas v0.2+ column names 🚨
+            data_for_eval = {
+                "user_input": [],
+                "response": [],
+                "retrieved_contexts": [],
+                "reference": []
+            }
 
-        for pair in zip(questions, contexts, answers):
-            question = pair[0]
-            ground_truth = pair[2]
+            for pair in zip(questions, contexts, answers):
+                question = pair[0]
+                ground_truth = pair[2]
 
-            retrieved_contexts = self.db_manager.query_similarity(question, limit=2)
+                retrieved_contexts = self.db_manager.query_similarity(question, limit=2)
 
-            generated_answer = self.generate_rag_answers(question, retrieved_contexts)
+                generated_answer = self.generate_rag_answers(question, retrieved_contexts)
 
-            data_for_eval["question"].append(question)
-            data_for_eval["answer"].append(generated_answer)
-            data_for_eval["context"].append(retrieved_contexts)
-            data_for_eval["ground_truth"].append(ground_truth)
+                # 🚨 Update the append logic to match the new keys 🚨
+                data_for_eval["user_input"].append(question)
+                data_for_eval["response"].append(generated_answer)
+                data_for_eval["retrieved_contexts"].append(retrieved_contexts)
+                data_for_eval["reference"].append(ground_truth)
 
-        
-        hf_dataset= Dataset.from_dict(data_for_eval)
+            
+            hf_dataset= Dataset.from_dict(data_for_eval)
 
-        logger.info("Calculating metrics...")
-        result = evaluate(
-            dataset=hf_dataset,
-            metrics=[faithfulness, answer_relevancy, context_precision],
-            llm=self.eval_llm,
-            embeddings=self.eval_embeddings
-        )
-        return result
+            logger.info("Calculating metrics...")
+            result = evaluate(
+                dataset=hf_dataset,
+                metrics=[faithfulness, answer_relevancy, context_precision],
+                llm=self.eval_llm,
+                embeddings=self.eval_embeddings
+            )
+            return result
