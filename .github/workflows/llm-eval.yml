@@ -1,0 +1,44 @@
+name: Continuous RAG Evaluation
+
+# Trigger the pipeline ONLY when markdown files in the data folder change
+on:
+  push:
+    paths:
+      - 'data/**/*.md'
+  pull_request:
+    paths:
+      - 'data/**/*.md'
+
+jobs:
+  evaluate-rag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Ollama Engine
+        run: curl -fsSL https://ollama.com/install.sh | sh
+
+      - name: Start Ollama Background Service
+        run: ollama serve & sleep 10
+
+      - name: Pull Lightweight Models for CI/CD
+        run: |
+          ollama pull llama3.2:1b
+          ollama pull nomic-embed-text
+
+      - name: Run LLMOps Continuous Evaluation
+        # We pass our GitHub Secrets directly into the script as Environment Variables
+        env:
+          QDRANT_URL: ${{ secrets.QDRANT_URL }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+        run: python pipeline.py
