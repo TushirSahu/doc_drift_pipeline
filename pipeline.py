@@ -92,7 +92,13 @@ def main():
 
     # print("\nPipeline execution completed.")
 
-    if results.get("faithfulness_score", 0) < 0.8:
+    # if results.get("faithfulness_score", 0) < 0.8:
+    #     logger.warning("Faithfulness score below threshold! \
+    #         Potential documentation drift detected.")
+    # else:
+    #     logger.info("Documentation appears to be faithful to the source.")
+
+    if df["faithfulness_score"].mean() < 0.8:
         logger.warning("Faithfulness score below threshold! \
             Potential documentation drift detected.")
     else:
