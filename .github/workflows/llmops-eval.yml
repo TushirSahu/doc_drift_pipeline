@@ -33,7 +33,7 @@ jobs:
 
       - name: Pull Lightweight Models for CI/CD
         run: |
-          ollama pull llama3.2:1b
+          ollama pull llama3.2:3b
           ollama pull nomic-embed-text
 
       - name: Run LLMOps Continuous Evaluation
