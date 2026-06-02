@@ -16,7 +16,7 @@ class QADataset(BaseModel):
     qa_pairs: List[QAPair]
 
 class SyntheticDataGenerator:
-    def __init__(self,model_name:str = "llama3"):
+    def __init__(self,model_name:str = "llama3.2:1b"):
         self.model_name = model_name
 
     def generate_qa_pairs(self,text:str,num_questions:int = 5) -> List[dict]:
