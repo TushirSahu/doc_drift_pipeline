@@ -23,7 +23,8 @@ class RAGEvaluator:
     def __init__(self, model_name:str = "llama3.2:3b", embed_model:str = "nomic-embed-text"):
         self.model_name = model_name
         self.db_manager = CloudVectorStoreManager()
-        self.eval_llm = ChatOllama(model=model_name)
+        self.temperature = 0.0
+        self.eval_llm = ChatOllama(model=model_name, temperature=self.temperature)
         self.eval_embeddings = OllamaEmbeddings(model=embed_model)
 
     def generate_rag_answers(self, question: str, contexts: list) -> str:
@@ -45,7 +46,6 @@ class RAGEvaluator:
     def run_evaluation(self, questions: list, contexts: list, answers: list) -> dict:
             logger.info("Running RAG evaluation...")
 
-            # 🚨 Use the modern Ragas v0.2+ column names 🚨
             data_for_eval = {
                 "user_input": [],
                 "response": [],
@@ -61,7 +61,6 @@ class RAGEvaluator:
 
                 generated_answer = self.generate_rag_answers(question, retrieved_contexts)
 
-                # 🚨 Update the append logic to match the new keys 🚨
                 data_for_eval["user_input"].append(question)
                 data_for_eval["response"].append(generated_answer)
                 data_for_eval["retrieved_contexts"].append(retrieved_contexts)
@@ -71,7 +70,7 @@ class RAGEvaluator:
             hf_dataset= Dataset.from_dict(data_for_eval)
 
             runner_config = RunConfig(
-            timeout=240,     # Bumps maximum wait time per request to 4 minutes
+            timeout=600,     # Bumps maximum wait time per request to 4 minutes
             max_workers=1    # Forces sequential processing so Ollama doesn't choke on the CPU
         )
 
