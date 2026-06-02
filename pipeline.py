@@ -71,7 +71,9 @@ def main():
 
     logger.info("Running RAG evaluation...")
     evaluator = RAGEvaluator()
-    results = evaluator.run_evaluation(qa_pairs)
+    results = evaluator.run_evaluation(questions=[pair['question'] for pair in qa_pairs],
+                                     contexts=[pair['answer'] for pair in qa_pairs],
+                                     answers=[pair['answer'] for pair in qa_pairs])
 
     print("\n" + "="*50)
     print("EVALUATION RESULTS")
