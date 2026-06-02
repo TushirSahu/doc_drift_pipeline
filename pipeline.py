@@ -55,7 +55,7 @@ def main():
             text = f.read()
             full_text += text + "\n"
         
-        db.add_document(
+        db.add_documents(
             doc_id=file_path.replace("/", "_"), 
             text=text, 
             metadata={"source": file_path}
