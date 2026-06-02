@@ -51,9 +51,9 @@ class RAGEvaluator:
             "ground_truth": []
         }
 
-        for pair in synthetic_qa_pairs:
-            question = pair['question']
-            ground_truth = pair['answer']
+        for pair in zip(questions, contexts, answers):
+            question = pair[0]
+            ground_truth = pair[2]
 
             contexts = self.db_manager.retrieve_relevant_context(question, limit=2)
 
