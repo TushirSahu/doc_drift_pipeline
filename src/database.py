@@ -63,7 +63,7 @@ class CloudVectorStoreManager:
 
     def query_similarity(self,query:str, limit:int =3):
         query_embedding = self.embedder.get_embeddings(query)
-        search_result = self.client.search(
+        search_result = self.client.query_points(
             collection_name=self.collection_name,
             query_vector=query_embedding,
             limit=limit
