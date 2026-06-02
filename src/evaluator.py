@@ -69,11 +69,17 @@ class RAGEvaluator:
             
             hf_dataset= Dataset.from_dict(data_for_eval)
 
+            runner_config = RunConfig(
+            timeout=240,     # Bumps maximum wait time per request to 4 minutes
+            max_workers=1    # Forces sequential processing so Ollama doesn't choke on the CPU
+        )
+
             logger.info("Calculating metrics...")
             result = evaluate(
                 dataset=hf_dataset,
                 metrics=[faithfulness, answer_relevancy, context_precision],
                 llm=self.eval_llm,
-                embeddings=self.eval_embeddings
+                embeddings=self.eval_embeddings,
+                run_config=runner_config
             )
             return result
