@@ -80,7 +80,7 @@ def main():
     print("="*50)
 
     df = results.to_pandas()
-    metrics_to_display = ["faithfulness_score", "answer_relevancy_score", "context_precision_score"]
+    metrics_to_display = ["faithfulness", "answer_relevancy", "context_precision"]
     for metric in metrics_to_display:
         if metric in df.columns:
             print(f"{metric.replace('_',' ').title():<25}: {df[metric].mean()*100:.2f}%")
@@ -98,7 +98,7 @@ def main():
     # else:
     #     logger.info("Documentation appears to be faithful to the source.")
 
-    if df["faithfulness_score"].mean() < 0.8:
+    if df["faithfulness"].mean() < 0.8:
         logger.warning("Faithfulness score below threshold! \
             Potential documentation drift detected.")
     else:
