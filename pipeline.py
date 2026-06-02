@@ -78,10 +78,19 @@ def main():
     print("\n" + "="*50)
     print("EVALUATION RESULTS")
     print("="*50)
-    for metric, score in results.scores.items():
-        print(f"{metric.replace('_',' ').title():<25}: {score*100:.2f}%")
 
-    print("\nPipeline execution completed.")
+    df = results.to_pandas()
+    metrics_to_display = ["faithfulness_score", "answer_relevancy_score", "context_precision_score"]
+    for metric in metrics_to_display:
+        if metric in df.columns:
+            print(f"{metric.replace('_',' ').title():<25}: {df[metric].mean()*100:.2f}%")
+        else:
+            logger.warning(f"Metric '{metric}' not found in results.")
+            
+    # for metric, score in results.scores.items():
+    #     print(f"{metric.replace('_',' ').title():<25}: {score*100:.2f}%")
+
+    # print("\nPipeline execution completed.")
 
     if results.get("faithfulness_score", 0) < 0.8:
         logger.warning("Faithfulness score below threshold! \
