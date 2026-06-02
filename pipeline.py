@@ -1,4 +1,5 @@
 import os
+import glob
 import logging
 from src.database import CloudVectorStoreManager
 from src.generator import SyntheticDataGenerator
