@@ -1,19 +1,25 @@
+import sys
+import types
 import logging
+dummy_chat = types.ModuleType("langchain_community.chat_models.vertexai")
+dummy_chat.ChatVertexAI = type("ChatVertexAI", (object,), {})
+sys.modules["langchain_community.chat_models.vertexai"] = dummy_chat
+# ---------------------------------------------
 import pandas as pd
 from datasets import Dataset
 from ollama import chat
 from ragas import evaluate
 from ragas.metrics import faithfulness, answer_relevancy, context_precision
-from langchain_community.chat_models import ChatOllama
-from langchain_community.embeddings import OllamaEmbeddings
-from database import CloudVectorStoreManager
+from langchain_ollama import ChatOllama
+from langchain_ollama import OllamaEmbeddings
+from src.database import CloudVectorStoreManager
 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class RAGEvaluator:
-    def __init__(self, model_name:str = "llama3", embed_model:str = "nomic-embed-text"):
+    def __init__(self, model_name:str = "llama3.2:1b", embed_model:str = "nomic-embed-text"):
         self.model_name = model_name
         self.db_manager = CloudVectorStoreManager()
         self.eval_llm = ChatOllama(model=model_name)
