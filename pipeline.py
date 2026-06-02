@@ -78,7 +78,7 @@ def main():
     print("\n" + "="*50)
     print("EVALUATION RESULTS")
     print("="*50)
-    for metric,score in results.items():
+    for metric, score in results.scores.items():
         print(f"{metric.replace('_',' ').title():<25}: {score*100:.2f}%")
 
     print("\nPipeline execution completed.")
