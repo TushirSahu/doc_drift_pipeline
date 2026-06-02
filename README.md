@@ -1,49 +1,56 @@
-# Documentation Drift Detection Pipeline
+# 🕵️‍♂️ Documentation Drift Detection Pipeline
 
-An LLMOps system that detects documentation drift by generating synthetic QA pairs and evaluating RAG system performance using multiple quality metrics.
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Ollama](https://img.shields.io/badge/LLM-Ollama-black)](https://ollama.com/)
+[![Qdrant](https://img.shields.io/badge/Vector_DB-Qdrant-red)](https://qdrant.tech/)
+[![Ragas](https://img.shields.io/badge/Evaluation-RAGAS-green)](https://docs.ragas.io/)
 
-## What It Does
+An **LLMOps system** designed to detect documentation drift by generating synthetic QA pairs and evaluating RAG (Retrieval-Augmented Generation) system performance using multiple quality metrics.
 
-Automatically validates technical documentation by:
-- Generating synthetic QA pairs from documentation using Ollama
-- Retrieving context via vector similarity search (Qdrant)
-- Evaluating answers on Faithfulness, Relevancy, and Precision
-- Alerting when documentation becomes outdated
+## 🎯 What It Does
 
-## Tech Stack
+Automatically validates technical documentation to ensure it stays up-to-date by:
+- 🤖 **Data Synthesis**: Generating synthetic QA pairs directly from documentation using Ollama.
+- 🔍 **Vector Retrieval**: Retrieving relevant context via semantic similarity search in Qdrant.
+- 📊 **Metric Evaluation**: Scoring answers strictly on *Faithfulness*, *Relevancy*, and *Precision*.
+- 🚨 **Drift Alerting**: Automatically flagging documentation when it becomes outdated or misaligned.
 
-**Vector DB**: Qdrant | **LLM**: Ollama (llama3) | **Embeddings**: Local embedder | **Evaluation**: RAGAS | **Framework**: LangChain
+## 🛠️ Tech Stack
 
-## Quick Start
+**Vector DB**: Qdrant | **LLM**: Ollama (`llama3`) | **Embeddings**: Local embedder | **Evaluation**: RAGAS | **Framework**: LangChain
+
+## 🚀 Quick Start
 
 ```bash
-# Setup
+# 1. Clone & Setup
 git clone https://github.com/TushirSahu/doc_drift_pipeline.git
 cd doc_drift_pipeline
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# Configure
+# 2. Configure Environment
 echo "QDRANT_URL=http://localhost:6333" > .env
 echo "QDRANT_API_KEY=your_key" >> .env
 
-# Run
-ollama run llama3  # in another terminal
+# 3. Run Pipeline (Ensure Ollama is running in background)
+ollama run llama3  # Run in a separate terminal
 python pipeline.py
 ```
 
-## Output Example
+## 📈 Output Example
 
-```
+```text
+==================================================
 EVALUATION RESULTS
+==================================================
 Faithfulness Score      : 87.50%
 Answer Relevancy        : 92.30%
 Context Precision       : 88.75%
 ```
 
-## Key Components
+## 🧩 Key Components
 
-- **database.py** — Qdrant vector store management & semantic search
-- **generator.py** — Synthetic QA pair generation via Ollama
-- **evaluator.py** — RAG evaluation using RAGAS metrics
-- **pipeline.py** — Main orchestration logic
+- `database.py` — Qdrant vector store management & semantic search
+- `generator.py` — Synthetic QA pair generation via Ollama
+- `evaluator.py` — RAG evaluation using RAGAS metrics
+- `pipeline.py` — Main execution and orchestration logic
