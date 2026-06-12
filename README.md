@@ -158,9 +158,9 @@ of its tools.
 Python · FastAPI · Qdrant (vector store) · Ollama (local LLM + embeddings) ·
 Ragas (evaluation) · BM25 hybrid search · Pydantic · pytest · GitHub Actions ·
 Docker Compose.
-
+<!-- 
 ## Roadmap
 
 See `FEATURE_PLAN.md` for the full design rationale. Next up: prompt/model A-B
 evaluation, streaming responses with conversation memory, a real cross-encoder
-reranker, and per-request token/cost accounting.
+reranker, and per-request token/cost accounting. -->
