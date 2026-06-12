@@ -1,43 +1,56 @@
 name: Continuous RAG Evaluation
 
-# Trigger the pipeline ONLY when markdown files in the data folder change
 on:
   push:
     paths:
       - 'data/**/*.md'
+      - 'src/**'
+      - 'config/**'
+      - 'pipeline.py'
   pull_request:
     paths:
       - 'data/**/*.md'
+      - 'src/**'
+      - 'config/**'
+      - 'pipeline.py'
 
 jobs:
-  evaluate-rag:
+  unit-tests:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install Python Dependencies
-        run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt
 
-      - name: Install Ollama Engine
-        run: curl -fsSL https://ollama.com/install.sh | sh
+      - run: pytest tests/ -v
 
-      - name: Start Ollama Background Service
-        run: ollama serve & sleep 10
+  evaluate-rag:
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Pull Lightweight Models for CI/CD
-        run: |
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - run: pip install -r requirements.txt
+
+      - run: curl -fsSL https://ollama.com/install.sh | sh
+
+      - run: ollama serve & sleep 10
+
+      - run: |
           ollama pull llama3.2:3b
           ollama pull nomic-embed-text
 
-      - name: Run LLMOps Continuous Evaluation
-        # We pass our GitHub Secrets directly into the script as Environment Variables
+      - name: Run evaluation (fails on drift)
         env:
           QDRANT_URL: ${{ secrets.QDRANT_URL }}
           QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
