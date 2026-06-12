@@ -1,0 +1,62 @@
+models:
+  llm: "llama3.2:3b"
+  embed: "nomic-embed-text"
+
+chunking:
+  chunk_size: 500
+  overlap: 50
+  strategy: "markdown"
+
+retrieval:
+  top_k: 2
+  mmr_lambda: 0.5
+  use_mmr: false
+  use_hybrid: false
+  hybrid_alpha: 0.5
+  rerank: false
+  rerank_candidates: 10
+
+evaluation:
+  num_questions: 5
+  metrics:
+    - faithfulness
+    - answer_relevancy
+    - context_precision
+    - context_recall
+    - answer_correctness
+  timeout: 600
+  max_workers: 1
+
+drift:
+  faithfulness_threshold: 0.8
+  regression_threshold: 0.05
+  baseline_path: "metrics/baseline.json"
+
+agentic:
+  max_steps: 5
+  tools:
+    - calculator
+    - search_docs
+  # web_search is available but disabled by default (stub only)
+
+paths:
+  data_dir: "data"
+  metrics_dir: "metrics"
+  prompts_dir: "prompts"
+
+prompts:
+  version: "v1"
+
+guardrails:
+  min_grounding: 0.3       # answers below this overlap with context are flagged
+  require_citation: true   # final answer must include [Source: ...]
+
+cache:
+  embedding_maxsize: 2048
+  embedding_ttl: 86400     # embeddings are deterministic — cache for a day
+  retrieval_maxsize: 512
+  retrieval_ttl: 600       # results invalidated on re-ingest
+
+resilience:
+  attempts: 3              # retries for Ollama/Qdrant calls
+  base_delay: 0.5

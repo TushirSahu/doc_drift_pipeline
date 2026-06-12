@@ -3,7 +3,7 @@
 ## Overview
 The Payment API provides endpoints for processing payments, managing transactions, and retrieving payment history.
 
-## Base URL
+## Base URL Information
 ```
 https://api.payment.example.com/v1
 ```

@@ -1,1 +1,16 @@
+# Secrets
 .env
+
+# Runtime metrics & traces — but keep the committed drift baseline
+metrics/*
+!metrics/baseline.json
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# OS / editor
+.DS_Store
+.vscode/
+.sixth/

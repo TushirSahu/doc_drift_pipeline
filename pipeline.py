@@ -1,109 +1,103 @@
-import os
+import argparse
 import glob
 import logging
-from src.database import CloudVectorStoreManager
-from src.generator import SyntheticDataGenerator
-from src.evaluator import RAGEvaluator
+import sys
 
+from src.core.settings import ROOT_DIR, cfg
+from src.evaluation import METRICS, RAGEvaluator, SyntheticDataGenerator, enforce_drift_or_exit
+from src.ingestion import ingest_all
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def main():
-    logger.info("Starting LLMOps Continuous Evaluation Pipeline...")
-    #step 1: Create sample documentation file
-    # os.makedirs("data", exist_ok=True)
-    # sample_file = "data/auth_service_v2.md"
 
-    # doc_content = """
-    # # Auth Service v2.0
-    # The new Auth Service v2.0 uses OAuth2 and JWT tokens instead of session cookies. 
-    # Tokens expire after 15 minutes by default. 
-    # To refresh a token, you must hit the `/api/v2/auth/refresh` endpoint.
-    # Admin users have an extended maximum session time of 12 hours.
-    # """  
-
-    # with open(sample_file, "w") as f:
-    #     f.write(doc_content)    
-    # logger.info(f"Document written to {sample_file}")
-
-    # logger.info("Ingesting document into vector store...")
-    # db_manager = CloudVectorStoreManager()
-    # with open(sample_file, "r") as f:
-    #     text = f.read()
-    
-    # chunks_added = db_manager.add_documents(
-    #     doc_id="doc_auth_v2", text=text, 
-    #     metadata={"source": sample_file, "version": "v2.0"})
-
-    # #Step 2: Ingest document into vector store
-    # logger.info(f"Document ingested with {chunks_added} chunks")
+def _collect_scores(df) -> dict:
+    return {m: float(df[m].mean()) for m in METRICS if m in df.columns}
 
 
-    logger.info("Scanning for documentation files...")
-    markdown_files = glob.glob("data/*.md")
-    logger.info(f"Found {len(markdown_files)} markdown files for ingestion.")
-    
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="DocDrift evaluation pipeline")
+    parser.add_argument("--set-baseline", action="store_true",
+                        help="Save current metrics as the drift baseline")
+    parser.add_argument("--skip-ingest", action="store_true",
+                        help="Skip the ingestion step")
+    parser.add_argument("--compare-retrievers", action="store_true",
+                        help="Run top_k=2 vs top_k=5 vs MMR side-by-side")
+    parser.add_argument("--compare-agentic", action="store_true",
+                        help="Compare naive RAG vs agentic RAG on same questions")
+    args = parser.parse_args(argv)
+
+    logger.info("Starting DocDrift pipeline...")
+
+    if not args.skip_ingest:
+        total = ingest_all()
+        logger.info("Ingested %d chunks", total)
+
+    data_dir = cfg("paths", "data_dir", default="data")
+    markdown_files = glob.glob(str(ROOT_DIR / data_dir / "*.md"))
     if not markdown_files:
-        logger.error("No markdown files found in /data directory. Exiting.")
-        return
+        logger.error("No markdown files found in %s", data_dir)
+        return 1
 
-    db = CloudVectorStoreManager()
     full_text = ""
-
     for file_path in markdown_files:
-        with open(file_path, "r") as f:
-            text = f.read()
-            full_text += text + "\n"
-        
-        db.add_documents(
-            doc_id=file_path.replace("/", "_"), 
-            text=text, 
-            metadata={"source": file_path}
-        )
-    logger.info("Successfully ingested dynamic files into Qdrant Cloud.")
+        with open(file_path, encoding="utf-8") as f:
+            full_text += f.read() + "\n"
 
-    
-    logger.info("Generating synthetic QA pairs...")
     generator = SyntheticDataGenerator()
+    num_q = cfg("evaluation", "num_questions", default=5)
+    qa_pairs = generator.generate_qa_pairs(full_text, num_questions=num_q)
+    logger.info("Generated %d QA pairs", len(qa_pairs))
 
-    qa_pairs = generator.generate_qa_pairs(text, num_questions=5)
-    logger.info(f"Generated {len(qa_pairs)} QA pairs")
+    if not qa_pairs:
+        logger.error("No QA pairs generated")
+        return 1
 
-    logger.info("Running RAG evaluation...")
+    questions = [p["question"] for p in qa_pairs]
+    answers = [p["answer"] for p in qa_pairs]
     evaluator = RAGEvaluator()
-    results = evaluator.run_evaluation(questions=[pair['question'] for pair in qa_pairs],
-                                     contexts=[pair['answer'] for pair in qa_pairs],
-                                     answers=[pair['answer'] for pair in qa_pairs])
 
-    print("\n" + "="*50)
-    print("EVALUATION RESULTS")
-    print("="*50)
+    if args.compare_agentic:
+        comparison = evaluator.compare_naive_vs_agentic(questions, answers, answers)
+        print("\n" + "=" * 50)
+        print("NAIVE vs AGENTIC RAG")
+        print("=" * 50)
+        for mode, scores in comparison.items():
+            print(f"\n--- {mode} ---")
+            for metric, score in scores.items():
+                print(f"  {metric.replace('_', ' ').title():<25}: {score * 100:.2f}%")
+        print("\nFull results → metrics/naive_vs_agentic.json")
+        return 0
+
+    if args.compare_retrievers:
+        comparison = evaluator.compare_retrievers(questions, answers, answers)
+        print("\n" + "=" * 50)
+        print("RETRIEVER COMPARISON")
+        print("=" * 50)
+        for config_name, scores in comparison.items():
+            print(f"\n--- {config_name} ---")
+            for metric, score in scores.items():
+                print(f"  {metric.replace('_', ' ').title():<25}: {score * 100:.2f}%")
+        print("\nFull results → metrics/retriever_comparison.json")
+        return 0
+
+    results = evaluator.run_evaluation(
+        questions=questions, contexts=answers, answers=answers,
+    )
 
     df = results.to_pandas()
-    metrics_to_display = ["faithfulness", "answer_relevancy", "context_precision"]
-    for metric in metrics_to_display:
-        if metric in df.columns:
-            print(f"{metric.replace('_',' ').title():<25}: {df[metric].mean()*100:.2f}%")
-        else:
-            logger.warning(f"Metric '{metric}' not found in results.")
-            
-    # for metric, score in results.scores.items():
-    #     print(f"{metric.replace('_',' ').title():<25}: {score*100:.2f}%")
+    scores = _collect_scores(df)
 
-    # print("\nPipeline execution completed.")
+    print("\n" + "=" * 50)
+    print("EVALUATION RESULTS")
+    print("=" * 50)
+    for metric, score in scores.items():
+        print(f"{metric.replace('_', ' ').title():<25}: {score * 100:.2f}%")
+    print("\nDetailed results → metrics/latest_eval.csv")
 
-    # if results.get("faithfulness_score", 0) < 0.8:
-    #     logger.warning("Faithfulness score below threshold! \
-    #         Potential documentation drift detected.")
-    # else:
-    #     logger.info("Documentation appears to be faithful to the source.")
+    enforce_drift_or_exit(scores, set_baseline=args.set_baseline)
+    return 0
 
-    if df["faithfulness"].mean() < 0.8:
-        logger.warning("Faithfulness score below threshold! \
-            Potential documentation drift detected.")
-    else:
-        logger.info("Documentation appears to be faithful to the source.")
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
