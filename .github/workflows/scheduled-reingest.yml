@@ -1,0 +1,34 @@
+name: Scheduled Re-ingestion & Drift Check
+
+# Runs on a cadence (not just on push) so documentation drift is caught even
+# when docs change outside this repo's normal commit flow. Also runnable on
+# demand from the Actions tab.
+on:
+  schedule:
+    - cron: '0 6 * * *'   # every day at 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  auto-reingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - run: pip install -r requirements.txt
+
+      - run: curl -fsSL https://ollama.com/install.sh | sh
+      - run: ollama serve & sleep 10
+      - run: |
+          ollama pull llama3.2:3b
+          ollama pull nomic-embed-text
+
+      - name: Detect changes, re-ingest, evaluate, fail on drift
+        env:
+          QDRANT_URL: ${{ secrets.QDRANT_URL }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+        run: python -m src.automation.cli --once --force

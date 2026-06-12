@@ -118,10 +118,11 @@ treat as Tier 2.5.)*
 **Why:** "Works on my machine" is the enemy of production. Pinned, containerized
 dependencies make deploys reproducible and onboarding instant.
 
-### 8. Incremental / scheduled re-ingestion
-**What:** A watcher or cron that re-ingests changed docs and re-runs the drift
-eval automatically. You already hash files (`ingest_state.json`) — extend that to
-trigger evals when docs change.
+### 8. Incremental / scheduled re-ingestion — **implemented** (`src/automation/`)
+**What:** Detects changed docs by content hash, re-ingests only those, re-runs
+the Ragas eval, and reports drift. Two entry points: `--once` (cron/CI, exits
+non-zero on drift) and `--watch` (local file watcher). A daily scheduled GitHub
+Actions workflow (`scheduled-reingest.yml`) runs it automatically.
 
 **Why:** "Documentation drift detection" should run *continuously*, not only when
 someone pushes. This closes the loop on the project's core promise.

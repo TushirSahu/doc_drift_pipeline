@@ -32,6 +32,7 @@ doc_drift_pipeline/
 │   │   └── cli.py                  # interactive Q&A
 │   ├── observability/              # per-request tracing + aggregate stats
 │   ├── evaluation/                 # QA generation, Ragas eval, drift gate
+│   ├── automation/                 # change detection + auto re-ingest + re-eval
 │   └── api/                        # FastAPI service (/health /query /ingest /metrics)
 ├── Dockerfile
 ├── docker-compose.yml              # one-command stack: api + qdrant + ollama
@@ -103,6 +104,25 @@ The same evaluation runs in CI on every push that touches docs, code, or config
 regresses past the baseline, the build fails — so documentation drift is caught
 before it ships.
 
+## Continuous re-ingestion
+
+Drift detection shouldn't wait for a human to push. The automation layer detects
+which docs changed (by content hash), re-ingests only those, re-runs the
+evaluation, and reports drift:
+
+```bash
+# One-shot — re-ingest changed docs, re-eval, exit non-zero on drift.
+# Wire into cron or a scheduled CI job.
+python -m src.automation.cli --once
+
+# Watch the data dir locally and react to edits (never exits on drift).
+python -m src.automation.cli --watch --interval 60
+```
+
+Exit codes: `0` clean, `1` drift detected, `2` ingestion failed — so `--once`
+doubles as a quality gate. A daily scheduled run ships in
+`.github/workflows/scheduled-reingest.yml`.
+
 ## Agentic RAG vs. naive RAG
 
 Naive RAG retrieves once and answers. The agentic controller lets the LLM decide
@@ -141,7 +161,6 @@ Docker Compose.
 
 ## Roadmap
 
-See `FEATURE_PLAN.md` for the full design rationale. Next up: scheduled
-re-ingestion that re-runs the drift eval when docs change, prompt/model A-B
-evaluation, streaming responses with conversation memory, and per-request
-token/cost accounting.
+See `FEATURE_PLAN.md` for the full design rationale. Next up: prompt/model A-B
+evaluation, streaming responses with conversation memory, a real cross-encoder
+reranker, and per-request token/cost accounting.

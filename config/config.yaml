@@ -60,3 +60,7 @@ cache:
 resilience:
   attempts: 3              # retries for Ollama/Qdrant calls
   base_delay: 0.5
+
+automation:
+  watch_interval: 30       # seconds between polls in `--watch` mode
+  fail_on_drift: true      # `--once` exits non-zero when drift is detected
