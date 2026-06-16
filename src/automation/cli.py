@@ -23,8 +23,9 @@ import logging
 import sys
 
 from src.automation.reingest import run_auto_reingest, watch
+from src.core.logging import configure_logging
 
-logging.basicConfig(level=logging.INFO)
+configure_logging()
 logger = logging.getLogger(__name__)
 
 

@@ -2,8 +2,9 @@ import glob
 import logging
 from pathlib import Path
 
+from src.core.identity import doc_id_for
 from src.core.settings import ROOT_DIR, cfg
-from src.ingestion.vectorstore import CloudVectorStoreManager
+from src.ingestion.vectorstore import CloudVectorStoreManager, get_vectorstore
 
 logger = logging.getLogger(__name__)
 
@@ -15,11 +16,10 @@ def ingest_file(db: CloudVectorStoreManager, file_path: str) -> int:
         return 0
 
     text = path.read_text(encoding="utf-8")
-    doc_id = str(path.relative_to(ROOT_DIR)).replace("/", "_")
     version = path.stem.split("_")[-1] if "_" in path.stem else "v1"
 
     return db.add_documents(
-        doc_id=doc_id,
+        doc_id=doc_id_for(path),
         text=text,
         metadata={"source": str(path), "version": version},
         skip_if_unchanged=True,
@@ -34,7 +34,7 @@ def ingest_all(data_dir: str | None = None) -> int:
         logger.warning("No markdown files found in %s", data_dir)
         return 0
 
-    db = CloudVectorStoreManager()
+    db = get_vectorstore()
     total = 0
     for file_path in files:
         chunks = ingest_file(db, file_path)

@@ -1,4 +1,3 @@
-import hashlib
 import json
 import logging
 import os
@@ -10,7 +9,8 @@ from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
-from src.core.settings import ROOT_DIR, cfg
+from src.core.identity import content_hash
+from src.core.settings import ROOT_DIR
 from src.ingestion.chunking import chunk_text
 from src.ingestion.embedder import LocalEmbedder
 from src.retrieval.engine import RetrievalEngine
@@ -48,9 +48,6 @@ class CloudVectorStoreManager:
                 ),
             )
 
-    def _file_hash(self, text: str) -> str:
-        return hashlib.sha256(text.encode()).hexdigest()
-
     def _load_ingest_state(self) -> Dict[str, str]:
         if not INGEST_STATE_FILE.exists():
             return {}
@@ -63,7 +60,7 @@ class CloudVectorStoreManager:
             json.dump(state, f, indent=2)
 
     def should_skip_ingest(self, doc_id: str, text: str) -> bool:
-        return self._load_ingest_state().get(doc_id) == self._file_hash(text)
+        return self._load_ingest_state().get(doc_id) == content_hash(text)
 
     def get_corpus_texts(self) -> List[str]:
         """Scroll all chunk texts from Qdrant (used by BM25 hybrid search)."""
@@ -118,7 +115,7 @@ class CloudVectorStoreManager:
         logger.info("Upserted %d chunks for '%s'", len(points), doc_id)
 
         state = self._load_ingest_state()
-        state[doc_id] = self._file_hash(text)
+        state[doc_id] = content_hash(text)
         self._save_ingest_state(state)
         self._corpus_cache = []
         return len(chunks)
@@ -141,3 +138,20 @@ class CloudVectorStoreManager:
             rerank=rerank,
             model_name=model_name,
         )
+
+
+# Process-wide cache of vector store managers, keyed by collection name.
+# Each manager opens a Qdrant client and builds an embedder, so constructing a
+# fresh one per request/tool-call (as the code used to) wastes connections.
+# Reuse one instead.
+_MANAGERS: Dict[str, "CloudVectorStoreManager"] = {}
+
+
+def get_vectorstore(collection_name: str | None = None) -> "CloudVectorStoreManager":
+    """Return a shared CloudVectorStoreManager for the given collection."""
+    key = collection_name or os.getenv("QDRANT_COLLECTION", "default_collection")
+    manager = _MANAGERS.get(key)
+    if manager is None:
+        manager = CloudVectorStoreManager(collection_name=key)
+        _MANAGERS[key] = manager
+    return manager

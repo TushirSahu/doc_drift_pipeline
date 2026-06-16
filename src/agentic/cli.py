@@ -11,8 +11,9 @@ import logging
 import sys
 
 from src.agentic.controller import AgenticController
+from src.core.logging import configure_logging
 
-logging.basicConfig(level=logging.INFO)
+configure_logging()
 logger = logging.getLogger(__name__)
 
 

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 
@@ -33,15 +34,30 @@ from src.api.models import (
     QueryResponse,
 )
 from src.core.cache import embedding_cache, retrieval_cache
+from src.core.logging import configure_logging
 from src.core.schema import ConfigError, validate_config
 from src.observability.stats import summarize_traces
 
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Fail fast on a bad config at boot rather than at the first request.
+    configure_logging()
+    try:
+        validate_config()
+    except ConfigError as exc:
+        logger.error("Config validation failed at startup: %s", exc)
+        raise
+    yield
+
+
 app = FastAPI(
     title="DocDrift API",
     version="1.0.0",
     description="Agentic RAG over your documentation, with drift detection.",
+    lifespan=lifespan,
 )
 
 
@@ -56,16 +72,6 @@ def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
         )
 
 
-@app.on_event("startup")
-def _validate_on_boot() -> None:
-    # Fail fast on a bad config rather than at the first request.
-    try:
-        validate_config()
-    except ConfigError as exc:
-        logger.error("Config validation failed at startup: %s", exc)
-        raise
-
-
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     checks: dict = {}
@@ -78,10 +84,9 @@ def health() -> HealthResponse:
 
     # Qdrant reachability (best-effort; never crash the health endpoint).
     try:
-        from src.ingestion.vectorstore import CloudVectorStoreManager
+        from src.ingestion.vectorstore import get_vectorstore
 
-        db = CloudVectorStoreManager()
-        db.client.get_collections()
+        get_vectorstore().client.get_collections()
         checks["qdrant"] = "ok"
     except Exception as exc:  # noqa: BLE001
         checks["qdrant"] = f"unreachable: {type(exc).__name__}"
@@ -92,8 +97,9 @@ def health() -> HealthResponse:
 
 @app.post("/query", response_model=QueryResponse, dependencies=[Depends(require_api_key)])
 def query(req: QueryRequest) -> QueryResponse:
-    controller = AgenticController()
-    result = controller.run(req.question)
+    # Controller construction is cheap; the shared vector store handles connection
+    # reuse. Constructing per request keeps the handler easy to test/mock.
+    result = AgenticController().run(req.question)
 
     guard = result["guardrails"]
     warning = None

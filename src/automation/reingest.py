@@ -20,7 +20,6 @@ functions that need them, so detection (and the tests) stay dependency-free.
 from __future__ import annotations
 
 import glob
-import hashlib
 import json
 import logging
 import time
@@ -28,6 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
+from src.core.identity import content_hash, doc_id_for
 from src.core.settings import ROOT_DIR, cfg
 
 logger = logging.getLogger(__name__)
@@ -39,15 +39,6 @@ INGEST_STATE_FILE = ROOT_DIR / "metrics" / "ingest_state.json"
 # --------------------------------------------------------------------------- #
 # Change detection (pure, no external services)
 # --------------------------------------------------------------------------- #
-def _doc_id(path: Path) -> str:
-    """Mirror ingestion.service.ingest_file's doc_id derivation."""
-    return str(path.relative_to(ROOT_DIR)).replace("/", "_")
-
-
-def _file_hash(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()
-
-
 def _load_state(state_path: Path) -> Dict[str, str]:
     if not state_path.exists():
         return {}
@@ -93,13 +84,9 @@ def detect_changes(
     seen_ids = set()
     for fp in files:
         path = Path(fp)
-        try:
-            doc_id = str(path.relative_to(root)).replace("/", "_")
-        except ValueError:
-            doc_id = path.name
+        doc_id = doc_id_for(path, root=root)
         seen_ids.add(doc_id)
-        text = path.read_text(encoding="utf-8")
-        digest = _file_hash(text)
+        digest = content_hash(path.read_text(encoding="utf-8"))
         if doc_id not in state:
             cs.added.append(doc_id)
         elif state[doc_id] != digest:

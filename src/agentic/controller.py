@@ -1,7 +1,7 @@
 
 import logging
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, TypedDict
 
 from ollama import chat
 
@@ -14,6 +14,21 @@ from src.observability.tracing import Tracer
 logger = logging.getLogger(__name__)
 
 TOOL_PATTERN = re.compile(r"TOOL:\s*(\w+)\s*ARGS:\s*(.+)", re.IGNORECASE | re.DOTALL)
+
+
+class AgentResult(TypedDict, total=False):
+    """Shape of the dict returned by AgenticController.run().
+
+    A TypedDict documents the contract for callers (API, evaluator, CLI) without
+    changing runtime behavior — it's still a plain dict.
+    """
+
+    answer: str
+    steps: int
+    tool_calls: List[Dict[str, str]]
+    retrieved_contexts: List[str]
+    guardrails: Dict[str, Any]
+    tools_used: List[str]
 
 
 class AgenticController:
@@ -37,14 +52,14 @@ class AgenticController:
         tool_name, _ = self._parse_tool_call(text)
         return tool_name is None
 
-    def _finalize(self, result: Dict[str, Any]) -> Dict[str, Any]:
+    def _finalize(self, result: AgentResult) -> AgentResult:
         """Attach guardrail verdict + tool-usage summary to a result dict."""
         verdict = check_answer(result["answer"], result.get("retrieved_contexts", []))
         result["guardrails"] = verdict.to_dict()
         result["tools_used"] = sorted({c["tool"] for c in result.get("tool_calls", [])})
         return result
 
-    def run(self, question: str) -> Dict[str, Any]:
+    def run(self, question: str) -> AgentResult:
         # Trace the whole request so latency/steps/grounding land in traces.jsonl.
         with Tracer("agentic_query") as tracer:
             result = self._run(question)
@@ -59,7 +74,7 @@ class AgenticController:
             )
             return result
 
-    def _run(self, question: str) -> Dict[str, Any]:
+    def _run(self, question: str) -> AgentResult:
         messages = [
             {"role": "system", "content": self._system_prompt()},
             {"role": "user", "content": question},
