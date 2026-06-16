@@ -56,3 +56,7 @@ class FeedbackResponse(BaseModel):
     id: str
     rating: str
     promoted_to_regression: bool
+
+
+class SourcesResponse(BaseModel):
+    documents: List[str]

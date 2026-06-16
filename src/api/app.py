@@ -35,6 +35,7 @@ from src.api.models import (
     MetricsResponse,
     QueryRequest,
     QueryResponse,
+    SourcesResponse,
 )
 from src.core.cache import embedding_cache, retrieval_cache
 from src.core.logging import configure_logging
@@ -139,6 +140,21 @@ def ingest() -> IngestResponse:
     # New docs may change retrieval results — drop the stale cache.
     retrieval_cache.clear()
     return IngestResponse(ingested_chunks=total)
+
+
+@app.get("/sources", response_model=SourcesResponse, dependencies=[Depends(require_api_key)])
+def sources() -> SourcesResponse:
+    """List the documents currently ingested (from the ingest-state file)."""
+    import json
+
+    from src.ingestion.vectorstore import INGEST_STATE_FILE
+
+    docs: list[str] = []
+    if INGEST_STATE_FILE.exists():
+        state = json.loads(INGEST_STATE_FILE.read_text(encoding="utf-8"))
+        for doc_id in state:
+            docs.append(doc_id[5:] if doc_id.startswith("data_") else doc_id)
+    return SourcesResponse(documents=sorted(docs))
 
 
 @app.get("/metrics", response_model=MetricsResponse, dependencies=[Depends(require_api_key)])
