@@ -41,13 +41,37 @@ config change causes a measurable quality regression** ("documentation drift").
 
 ## Demo
 
-An interactive, no-backend demo lives in [`demo/index.html`](demo/index.html) —
-open it in a browser to click through sample questions, grounding badges,
-citations, the agent trace, and the live metrics panel (great for a screen
-recording). The image above is rendered from it.
+An interactive demo lives in [`demo/index.html`](demo/index.html) — open it in a
+browser to click through sample questions, grounding badges, citations, the agent
+trace, and the metrics panel (great for a screen recording). The image above is
+rendered from it.
 
-To run it live against the real stack, start the API (below) and point a UI at
-`/query` and `/metrics`.
+### Run it for real
+
+The same page can drive a **live backend** — real answers, real agent traces,
+real metrics, and feedback that actually writes to disk:
+
+```bash
+# 1. start the model server and pull the models
+ollama serve &
+ollama pull llama3.2:3b && ollama pull nomic-embed-text
+
+# 2. start Qdrant as a server (so ingestion + API can share it)
+docker run -d -p 6333:6333 qdrant/qdrant      # then set QDRANT_URL=http://localhost:6333 in .env
+
+# 3. ingest the docs, then start the API
+python -m src.ingestion.cli --all
+uvicorn src.api.app:app --reload --port 8000
+
+# 4. open the demo and click "Connect to live API"
+open demo/index.html
+```
+
+The demo auto-detects the API at `http://localhost:8000` on load; if it's
+running, the status flips to **● Live API** and every question hits `/query`. The
+API ships with CORS enabled for the browser, and exposes the agent's tool calls
+so the live trace is fully detailed. (Use a Qdrant **server** rather than the
+embedded on-disk mode here, since the API and ingestion are separate processes.)
 
 ## Architecture
 
