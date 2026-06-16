@@ -5,6 +5,9 @@
 metrics/*
 !metrics/baseline.json
 
+# Embedded Qdrant on-disk store
+qdrant_storage/
+
 # Python
 __pycache__/
 *.pyc
