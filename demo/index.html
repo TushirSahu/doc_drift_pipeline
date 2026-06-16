@@ -202,8 +202,22 @@ const SAMPLES = [
     trace: [ {tool:"search_docs", args:`"refresh access token endpoint"`, res:"2 chunks · top score 0.91"} ],
   },
   {
+    q: "How do I process a payment and what fields are required?",
+    answer: `Send a <b>POST</b> to <b>/payments/process</b> with a JSON body containing <b>amount</b>, <b>currency</b>, <b>payment_method</b>, <b>card_token</b>, and <b>customer_id</b>. A successful call returns a <b>transaction_id</b> and a <b>success</b> status. <span class="cite">[Source: doc_payment_v2.md]</span>`,
+    grounding: 0.93, cited: true, steps: 1,
+    sources: ["doc_payment_v2.md · Process Payment", "doc_payment_v2.md · chunk 2"],
+    trace: [ {tool:"search_docs", args:`"process payment endpoint request body"`, res:"2 chunks · top score 0.90"} ],
+  },
+  {
+    q: "How do I authenticate requests to the Payment API?",
+    answer: `All requests require <b>Bearer token</b> authentication in the Authorization header — <b>Authorization: Bearer YOUR_API_KEY</b>. A missing or invalid key returns <b>401 Unauthorized</b>. <span class="cite">[Source: doc_payment_v2.md]</span>`,
+    grounding: 0.91, cited: true, steps: 1,
+    sources: ["doc_payment_v2.md · Authentication", "doc_payment_v2.md · Error Codes"],
+    trace: [ {tool:"search_docs", args:`"payment API authentication header bearer"`, res:"2 chunks · top score 0.94"} ],
+  },
+  {
     q: "Does the payment API support refunds in euros?",
-    answer: `I don't have enough information in the documentation to answer that. The payment docs describe charge and transaction endpoints but don't mention refunds or currency-specific behavior.`,
+    answer: `I don't have enough information in the documentation to answer that. The payment docs describe payment processing and transaction endpoints, but don't mention refunds or currency-specific behavior.`,
     grounding: 0.0, cited: false, steps: 1, idk:true,
     sources: ["doc_payment_v2.md · chunk 3"],
     trace: [ {tool:"search_docs", args:`"refund euros currency"`, res:"1 chunk · top score 0.41 (low)"} ],
