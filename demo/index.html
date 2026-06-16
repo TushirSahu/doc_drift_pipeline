@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DocDrift — Demo</title>
+<style>
+  :root{
+    --bg:#0b0f17; --panel:#121826; --panel2:#0e1420; --line:#1f2937;
+    --text:#e6edf6; --muted:#93a1b5; --faint:#5b6878;
+    --accent:#5b8cff; --accent2:#7c5cff;
+    --green:#2fd6a0; --green-bg:rgba(47,214,160,.12);
+    --amber:#f7b955; --amber-bg:rgba(247,185,85,.12);
+    --red:#ff6b6b;
+    --chip:#172033;
+    --mono:'SF Mono',ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#16203a 0%,var(--bg) 55%);
+    color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased;min-height:100vh}
+  .wrap{max-width:1180px;margin:0 auto;padding:22px 22px 40px}
+
+  /* top bar */
+  .top{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:.2px}
+  .logo .mark{width:30px;height:30px;border-radius:8px;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;
+    font-size:16px;box-shadow:0 4px 18px rgba(91,140,255,.4)}
+  .tag{color:var(--muted);font-size:13px}
+  .spacer{flex:1}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;
+    font-size:12.5px;font-weight:600;border:1px solid var(--line);background:var(--panel)}
+  .pill .dot{width:8px;height:8px;border-radius:50%}
+  .pill.pass{color:var(--green);border-color:rgba(47,214,160,.35);background:var(--green-bg)}
+  .pill.pass .dot{background:var(--green);box-shadow:0 0 10px var(--green)}
+
+  .grid{display:grid;grid-template-columns:1.55fr 1fr;gap:18px}
+  @media(max-width:920px){.grid{grid-template-columns:1fr}}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+    border-radius:16px;padding:18px}
+  .card h3{margin:0 0 14px;font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted)}
+
+  /* chat */
+  .examples{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+  .ex{cursor:pointer;font-size:12.5px;padding:7px 12px;border-radius:999px;border:1px solid var(--line);
+    background:var(--chip);color:var(--muted);transition:.15s}
+  .ex:hover{color:var(--text);border-color:var(--accent)}
+  .ex.active{color:#fff;background:rgba(91,140,255,.18);border-color:var(--accent)}
+
+  .msg{margin-bottom:14px}
+  .q{display:flex;justify-content:flex-end}
+  .q .bubble{background:rgba(91,140,255,.16);border:1px solid rgba(91,140,255,.3);
+    padding:11px 14px;border-radius:14px 14px 4px 14px;max-width:80%;font-size:14.5px}
+  .a .bubble{background:#0c121d;border:1px solid var(--line);border-radius:14px 14px 14px 4px;padding:15px;max-width:92%}
+  .answer{font-size:15px;line-height:1.6}
+  .cite{color:var(--accent);font-weight:600}
+
+  .badges{display:flex;flex-wrap:wrap;gap:8px;margin:13px 0 4px}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+    padding:5px 10px;border-radius:8px;border:1px solid var(--line)}
+  .badge.ok{color:var(--green);background:var(--green-bg);border-color:rgba(47,214,160,.3)}
+  .badge.warn{color:var(--amber);background:var(--amber-bg);border-color:rgba(247,185,85,.3)}
+  .badge.neutral{color:var(--muted);background:var(--chip)}
+
+  .srcchips{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
+  .src{font-family:var(--mono);font-size:11.5px;color:var(--muted);background:var(--chip);
+    border:1px solid var(--line);padding:4px 9px;border-radius:7px}
+
+  details.trace{margin-top:12px;border-top:1px dashed var(--line);padding-top:11px}
+  details.trace summary{cursor:pointer;font-size:12.5px;color:var(--muted);user-select:none}
+  details.trace summary:hover{color:var(--text)}
+  .step{display:flex;gap:10px;align-items:flex-start;margin-top:10px;font-size:12.5px}
+  .step .n{flex:none;width:20px;height:20px;border-radius:6px;background:var(--chip);
+    display:grid;place-items:center;color:var(--accent);font-weight:700;font-size:11px}
+  .step code{font-family:var(--mono);color:#cdd9ea}
+  .step .res{color:var(--faint);margin-top:2px}
+
+  .fbrow{display:flex;align-items:center;gap:9px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+  .fbrow .lbl{font-size:12px;color:var(--faint);margin-right:auto}
+  .fb{cursor:pointer;border:1px solid var(--line);background:var(--chip);color:var(--muted);
+    border-radius:8px;padding:6px 11px;font-size:14px;transition:.15s}
+  .fb:hover{color:var(--text)}
+  .fb.up.on{color:var(--green);border-color:var(--green);background:var(--green-bg)}
+  .fb.down.on{color:var(--red);border-color:var(--red);background:rgba(255,107,107,.12)}
+  .fbnote{font-size:12px;color:var(--green);margin-top:9px;display:none}
+  .fbnote.show{display:block}
+
+  .inputbar{display:flex;gap:9px;margin-top:16px}
+  .inputbar input{flex:1;background:#0c121d;border:1px solid var(--line);border-radius:10px;
+    padding:11px 13px;color:var(--text);font-size:14px;font-family:var(--sans)}
+  .inputbar button{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;
+    color:#fff;font-weight:600;border-radius:10px;padding:0 18px;cursor:pointer;font-size:14px}
+
+  /* metrics */
+  .kpis{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:18px}
+  .kpi{background:#0c121d;border:1px solid var(--line);border-radius:12px;padding:12px}
+  .kpi .v{font-size:21px;font-weight:700;letter-spacing:.3px}
+  .kpi .k{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .kpi .v small{font-size:12px;color:var(--faint);font-weight:500}
+
+  .metric{margin-bottom:12px}
+  .metric .row{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px}
+  .metric .row b{font-weight:600}
+  .bar{height:7px;border-radius:999px;background:#0c121d;overflow:hidden;border:1px solid var(--line)}
+  .bar > span{display:block;height:100%;border-radius:999px;
+    background:linear-gradient(90deg,var(--green),#5bd0ff)}
+  .gate{display:flex;align-items:center;gap:10px;margin-top:14px;padding:12px;border-radius:12px;
+    background:var(--green-bg);border:1px solid rgba(47,214,160,.3)}
+  .gate .big{font-weight:700;color:var(--green)}
+  .gate .sub{font-size:12px;color:var(--muted)}
+
+  .foot{margin-top:18px;text-align:center;color:var(--faint);font-size:12px}
+  .foot code{font-family:var(--mono);color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="logo"><div class="mark">◑</div> DocDrift</div>
+    <div class="tag">Agentic RAG over your docs — grounded, evaluated, drift-gated</div>
+    <div class="spacer"></div>
+    <div class="pill pass"><span class="dot"></span> Quality gate: passing</div>
+  </div>
+
+  <div class="grid">
+    <!-- LEFT: chat -->
+    <div class="card">
+      <h3>Ask the docs</h3>
+      <div class="examples" id="examples"></div>
+
+      <div id="thread"></div>
+
+      <div class="inputbar">
+        <input id="qinput" placeholder="Ask a question about your documentation…" />
+        <button onclick="ask()">Ask</button>
+      </div>
+    </div>
+
+    <!-- RIGHT: metrics -->
+    <div class="card">
+      <h3>Live metrics</h3>
+      <div class="kpis">
+        <div class="kpi"><div class="v">182<small> ms</small></div><div class="k">p50 latency</div></div>
+        <div class="kpi"><div class="v">410<small> ms</small></div><div class="k">p95 latency</div></div>
+        <div class="kpi"><div class="v">0.4<small> %</small></div><div class="k">error rate</div></div>
+        <div class="kpi"><div class="v">96<small> %</small></div><div class="k">grounding pass-rate</div></div>
+      </div>
+
+      <h3 style="margin-top:6px">Quality gate vs baseline</h3>
+      <div id="metrics"></div>
+
+      <div class="gate">
+        <div style="font-size:20px">✓</div>
+        <div>
+          <div class="big">No drift detected</div>
+          <div class="sub">All Ragas metrics within threshold of <code>baseline.json</code></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    Interactive demo with sample data · backed by FastAPI · Qdrant · Ollama · Ragas ·
+    run live with <code>uvicorn src.api.app:app</code>
+  </div>
+</div>
+
+<script>
+const SAMPLES = [
+  {
+    q: "What auth method does v2 use, and how long is an admin session in minutes?",
+    answer: `Auth Service v2.0 uses <b>OAuth2 with JWT tokens</b> instead of session cookies. Admin users have a maximum session of 12 hours, which is <b>720 minutes</b>. <span class="cite">[Source: auth_service_v2.md]</span>`,
+    grounding: 0.94, cited: true, steps: 2,
+    sources: ["auth_service_v2.md · chunk 1", "auth_service_v2.md · chunk 2"],
+    trace: [
+      {tool:"search_docs", args:`"admin session length auth v2"`, res:"3 chunks · top score 0.88"},
+      {tool:"calculator", args:"12 * 60", res:"720"},
+    ],
+  },
+  {
+    q: "How do I refresh an access token?",
+    answer: `Send a request to the <b>/api/v2/auth/refresh</b> endpoint. Tokens expire after 15 minutes by default, so refresh before then to stay authenticated. <span class="cite">[Source: auth_service_v2.md]</span>`,
+    grounding: 0.89, cited: true, steps: 1,
+    sources: ["auth_service_v2.md · chunk 1"],
+    trace: [ {tool:"search_docs", args:`"refresh access token endpoint"`, res:"2 chunks · top score 0.91"} ],
+  },
+  {
+    q: "Does the payment API support refunds in euros?",
+    answer: `I don't have enough information in the documentation to answer that. The payment docs describe charge and transaction endpoints but don't mention refunds or currency-specific behavior.`,
+    grounding: 0.0, cited: false, steps: 1, idk:true,
+    sources: ["doc_payment_v2.md · chunk 3"],
+    trace: [ {tool:"search_docs", args:`"refund euros currency"`, res:"1 chunk · top score 0.41 (low)"} ],
+  },
+];
+
+const METRICS = [
+  {name:"Faithfulness", val:0.99, base:0.98},
+  {name:"Answer relevancy", val:0.97, base:0.96},
+  {name:"Context precision", val:1.00, base:1.00},
+  {name:"Context recall", val:0.95, base:0.94},
+];
+
+function renderMetrics(){
+  document.getElementById('metrics').innerHTML = METRICS.map(m=>`
+    <div class="metric">
+      <div class="row"><span>${m.name}</span><b>${(m.val*100).toFixed(0)}%
+        <span style="color:var(--faint);font-weight:500">· base ${(m.base*100).toFixed(0)}%</span></b></div>
+      <div class="bar"><span style="width:${m.val*100}%"></span></div>
+    </div>`).join('');
+}
+
+function renderExamples(){
+  document.getElementById('examples').innerHTML = SAMPLES.map((s,i)=>
+    `<div class="ex${i===0?' active':''}" onclick="showSample(${i})">${s.q.length>46?s.q.slice(0,44)+'…':s.q}</div>`
+  ).join('');
+}
+
+function showSample(i){
+  document.querySelectorAll('.ex').forEach((e,j)=>e.classList.toggle('active',j===i));
+  renderAnswer(SAMPLES[i]);
+}
+
+function renderAnswer(s){
+  const groundBadge = s.idk
+    ? `<span class="badge neutral">↩ Abstained — not in docs</span>`
+    : (s.grounding>=0.5
+        ? `<span class="badge ok">● Grounded ${s.grounding.toFixed(2)}</span>`
+        : `<span class="badge warn">▲ Low grounding ${s.grounding.toFixed(2)}</span>`);
+  const citeBadge = s.cited
+    ? `<span class="badge ok">✓ Cited</span>`
+    : `<span class="badge warn">⚠ No citation</span>`;
+  const stepBadge = `<span class="badge neutral">⚙ ${s.steps} step${s.steps>1?'s':''}</span>`;
+
+  const steps = s.trace.map((t,i)=>`
+    <div class="step"><div class="n">${i+1}</div>
+      <div><code>${t.tool}(${t.args})</code><div class="res">→ ${t.res}</div></div>
+    </div>`).join('');
+
+  const srcs = s.sources.map(x=>`<span class="src">${x}</span>`).join('');
+
+  document.getElementById('thread').innerHTML = `
+    <div class="msg q"><div class="bubble">${s.q}</div></div>
+    <div class="msg a"><div class="bubble">
+      <div class="answer">${s.answer}</div>
+      <div class="badges">${groundBadge}${citeBadge}${stepBadge}</div>
+      <div class="srcchips">${srcs}</div>
+      <details class="trace"><summary>▸ Agent trace (${s.trace.length} tool call${s.trace.length>1?'s':''})</summary>${steps}</details>
+      <div class="fbrow">
+        <span class="lbl">Was this answer helpful?</span>
+        <button class="fb up" onclick="vote(this,'up')">👍</button>
+        <button class="fb down" onclick="vote(this,'down')">👎</button>
+      </div>
+      <div class="fbnote" id="fbnote"></div>
+    </div></div>`;
+}
+
+function vote(btn,kind){
+  document.querySelectorAll('.fb').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  const note = document.getElementById('fbnote');
+  note.classList.add('show');
+  note.style.color = kind==='up' ? 'var(--green)' : 'var(--accent)';
+  note.textContent = kind==='up'
+    ? '✓ Logged to feedback.jsonl'
+    : '↳ Promoted to regression_cases.jsonl — this question now guards the drift gate';
+}
+
+function ask(){
+  const v = document.getElementById('qinput').value.trim();
+  if(!v) return;
+  // Demo: route any free-text question to the closest sample answer.
+  renderAnswer({...SAMPLES[0], q:v});
+  document.getElementById('qinput').value='';
+}
+document.getElementById('qinput').addEventListener('keydown',e=>{if(e.key==='Enter')ask();});
+
+renderExamples(); renderMetrics(); renderAnswer(SAMPLES[0]);
+</script>
+</body>
+</html>
