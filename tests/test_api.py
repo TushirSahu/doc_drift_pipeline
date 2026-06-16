@@ -68,3 +68,36 @@ def test_query_rejects_empty_question(monkeypatch):
     with TestClient(app) as client:
         resp = client.post("/query", json={"question": ""})
     assert resp.status_code == 422  # pydantic validation
+
+
+def test_feedback_downvote_promoted(monkeypatch):
+    monkeypatch.delenv("DOCDRIFT_API_KEY", raising=False)
+
+    # Patch the storage layer so the test doesn't touch the real metrics dir.
+    import src.evaluation.feedback as fb
+
+    def fake_record(**kwargs):
+        return {"id": "abc123", "rating": kwargs["rating"],
+                "promoted_to_regression": kwargs["rating"] == "down"}
+
+    monkeypatch.setattr(fb, "record_feedback", fake_record)
+    with TestClient(app) as client:
+        resp = client.post("/feedback", json={
+            "question": "How long is the admin session?",
+            "answer": "5 minutes",
+            "rating": "down",
+            "correct_answer": "12 hours",
+        })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["rating"] == "down"
+    assert body["promoted_to_regression"] is True
+
+
+def test_feedback_rejects_bad_rating(monkeypatch):
+    monkeypatch.delenv("DOCDRIFT_API_KEY", raising=False)
+    with TestClient(app) as client:
+        resp = client.post("/feedback", json={
+            "question": "q", "answer": "a", "rating": "maybe",
+        })
+    assert resp.status_code == 422  # Literal["up","down"] validation

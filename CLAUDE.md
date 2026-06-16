@@ -26,7 +26,8 @@ Two halves work together:
   (TTL/LRU caches), `prompts.py` (versioned prompt loader).
 - `src/ingestion/` — markdown chunking, embedding (Ollama), Qdrant vector store,
   ingest state tracking by content hash (`metrics/ingest_state.json`).
-- `src/retrieval/` — dense search + MMR, hybrid (BM25) fusion, LLM rerank, all
+- `src/retrieval/` — dense search + MMR, hybrid (BM25) fusion, reranking
+  (`reranker.py`: cross-encoder via `rerank()` dispatcher, or LLM fallback), all
   orchestrated by `engine.py`.
 - `src/agentic/` — `controller.py` (the agent loop), `tools.py` (whitelisted
   tools: `search_docs`, `calculator`), `guardrails.py` (grounding + citation
@@ -35,7 +36,8 @@ Two halves work together:
   compare + gate).
 - `src/observability/` — per-request JSONL tracing (`metrics/traces.jsonl`) +
   aggregate stats (p50/p95 latency, error rate, tool usage).
-- `src/api/` — FastAPI app: `/health`, `/query`, `/ingest`, `/metrics`.
+- `src/api/` — FastAPI app: `/health`, `/query`, `/ingest`, `/metrics`,
+  `/feedback` (thumbs up/down; down-votes become regression cases).
 - `src/automation/` — change detection + auto re-ingest + re-eval (`--once` for
   cron/CI, `--watch` for local).
 - `pipeline.py` — top-level evaluation/drift CLI.

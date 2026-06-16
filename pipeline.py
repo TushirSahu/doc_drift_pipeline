@@ -26,6 +26,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="Run top_k=2 vs top_k=5 vs MMR side-by-side")
     parser.add_argument("--compare-agentic", action="store_true",
                         help="Compare naive RAG vs agentic RAG on same questions")
+    parser.add_argument("--include-regressions", action="store_true",
+                        help="Fold human-feedback regression cases into the QA set")
     args = parser.parse_args(argv)
 
     logger.info("Starting DocDrift pipeline...")
@@ -53,6 +55,14 @@ def main(argv: list[str] | None = None) -> int:
     if not qa_pairs:
         logger.error("No QA pairs generated")
         return 1
+
+    if args.include_regressions:
+        from src.evaluation import regression_qa_pairs
+
+        regressions = regression_qa_pairs()
+        if regressions:
+            logger.info("Adding %d regression case(s) from human feedback", len(regressions))
+            qa_pairs.extend(regressions)
 
     questions = [p["question"] for p in qa_pairs]
     answers = [p["answer"] for p in qa_pairs]

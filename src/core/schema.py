@@ -37,6 +37,8 @@ class RetrievalCfg(BaseModel):
     hybrid_alpha: float = Field(ge=0.0, le=1.0)
     rerank: bool = False
     rerank_candidates: int = Field(gt=0)
+    reranker: Literal["cross_encoder", "llm"] = "cross_encoder"
+    reranker_model: str = "BAAI/bge-reranker-base"
 
 
 class EvaluationCfg(BaseModel):
