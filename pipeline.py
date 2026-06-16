@@ -3,11 +3,12 @@ import glob
 import logging
 import sys
 
+from src.core.logging import configure_logging
 from src.core.settings import ROOT_DIR, cfg
 from src.evaluation import METRICS, RAGEvaluator, SyntheticDataGenerator, enforce_drift_or_exit
 from src.ingestion import ingest_all
 
-logging.basicConfig(level=logging.INFO)
+configure_logging()
 logger = logging.getLogger(__name__)
 
 

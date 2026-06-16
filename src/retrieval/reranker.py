@@ -13,11 +13,14 @@ from ollama import chat
 logger = logging.getLogger(__name__)
 
 
-def llm_rerank(question: str,candidates: List[str],model_name: str,limit: int,) -> List[str]:
-
+def llm_rerank(
+    question: str,
+    candidates: List[str],
+    model_name: str,
+    limit: int,
+) -> List[str]:
     if len(candidates) <= limit:
         return candidates
-
 
     numbered = "\n".join(f"{i + 1}. {c[:300]}" for i, c in enumerate(candidates))
     prompt = (

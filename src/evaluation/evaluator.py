@@ -22,7 +22,7 @@ from ragas.metrics import (
 
 from src.core.settings import cfg
 from src.evaluation.export import export_csv, export_json
-from src.ingestion.vectorstore import CloudVectorStoreManager
+from src.ingestion.vectorstore import get_vectorstore
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class RAGEvaluator:
     def __init__(self, model_name: str | None = None, embed_model: str | None = None):
         self.model_name = model_name or cfg("models", "llm", default="llama3.2:3b")
         self.embed_model = embed_model or cfg("models", "embed", default="nomic-embed-text")
-        self.db_manager = CloudVectorStoreManager()
+        self.db_manager = get_vectorstore()
         self.eval_llm = ChatOllama(model=self.model_name, temperature=0.0)
         self.eval_embeddings = OllamaEmbeddings(model=self.embed_model)
 

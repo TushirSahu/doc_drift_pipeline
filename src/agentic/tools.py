@@ -16,7 +16,7 @@ import operator
 from typing import Any, Callable, Dict
 
 from src.core.settings import cfg
-from src.ingestion.vectorstore import CloudVectorStoreManager
+from src.ingestion.vectorstore import get_vectorstore
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ def search_docs(query: str, limit: int | None = None) -> str:
     the agent chooses WHEN and HOW OFTEN to call it.
     """
     top_k = limit or cfg("retrieval", "top_k", default=2)
-    db = CloudVectorStoreManager()
+    db = get_vectorstore()
     chunks = db.query_similarity(query, limit=top_k)
     if not chunks:
         return "No relevant documentation found."

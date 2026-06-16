@@ -2,10 +2,11 @@ import argparse
 import logging
 import sys
 
+from src.core.logging import configure_logging
 from src.ingestion.service import ingest_all, ingest_file
-from src.ingestion.vectorstore import CloudVectorStoreManager
+from src.ingestion.vectorstore import get_vectorstore
 
-logging.basicConfig(level=logging.INFO)
+configure_logging()
 logger = logging.getLogger(__name__)
 
 
@@ -21,7 +22,7 @@ def main(argv: list[str] | None = None) -> int:
         logger.info("Total chunks ingested: %d", total)
         return 0
 
-    chunks = ingest_file(CloudVectorStoreManager(), args.file)
+    chunks = ingest_file(get_vectorstore(), args.file)
     logger.info("Ingested %d chunks from %s", chunks, args.file)
     return 0
 
