@@ -1,0 +1,102 @@
+<svg viewBox="0 0 940 470" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101a30"/><stop offset="0.6" stop-color="#0b0f17"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5b8cff"/><stop offset="1" stop-color="#7c5cff"/>
+    </linearGradient>
+    <marker id="arr" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#5b6f93"/>
+    </marker>
+    <style>
+      .box{fill:#121826;stroke:#243049;stroke-width:1.2;rx:11}
+      .lbl{fill:#e6edf6;font-size:13px;font-weight:600}
+      .sub{fill:#93a1b5;font-size:10.5px}
+      .lane{fill:#aab6c8;font-size:11px;font-weight:700;letter-spacing:1.4px}
+      .edge{stroke:#5b6f93;stroke-width:1.6;fill:none}
+      .pill{fill:#172033;stroke:#2a3a57;stroke-width:1}
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="940" height="470" rx="18" fill="url(#bg)"/>
+
+  <!-- title -->
+  <circle cx="34" cy="34" r="13" fill="url(#accent)"/>
+  <text x="55" y="33" fill="#ffffff" font-size="18" font-weight="700">DocDrift</text>
+  <text x="55" y="49" class="sub" font-size="11.5">Agentic RAG over your docs — grounded, evaluated, drift-gated</text>
+
+  <!-- ================= SERVING PATH ================= -->
+  <text x="34" y="92" class="lane">SERVING PATH</text>
+  <rect x="28" y="100" width="884" height="120" rx="14" fill="#0e1626" stroke="#1d2842"/>
+
+  <!-- nodes -->
+  <g>
+    <rect class="box" x="48"  y="132" width="118" height="56" rx="11"/>
+    <text x="107" y="156" text-anchor="middle" class="lbl">API / CLI</text>
+    <text x="107" y="173" text-anchor="middle" class="sub">/query · API key</text>
+
+    <rect class="box" x="214" y="124" width="150" height="72" rx="11"/>
+    <text x="289" y="150" text-anchor="middle" class="lbl">Agent controller</text>
+    <text x="289" y="167" text-anchor="middle" class="sub">reason → act → repeat</text>
+    <text x="289" y="182" text-anchor="middle" class="sub">tools: search_docs, calc</text>
+
+    <rect class="box" x="412" y="124" width="170" height="72" rx="11"/>
+    <text x="497" y="150" text-anchor="middle" class="lbl">Retrieval engine</text>
+    <text x="497" y="167" text-anchor="middle" class="sub">dense · hybrid (BM25)</text>
+    <text x="497" y="182" text-anchor="middle" class="sub">MMR · cross-encoder rerank</text>
+
+    <rect class="box" x="630" y="132" width="120" height="56" rx="11"/>
+    <text x="690" y="156" text-anchor="middle" class="lbl">Qdrant</text>
+    <text x="690" y="173" text-anchor="middle" class="sub">vector store</text>
+
+    <rect class="pill" x="784" y="126" width="118" height="32" rx="9"/>
+    <text x="843" y="146" text-anchor="middle" class="sub" fill="#2fd6a0">● Guardrails</text>
+    <rect class="pill" x="784" y="164" width="118" height="32" rx="9"/>
+    <text x="843" y="184" text-anchor="middle" class="sub" fill="#5b8cff">◆ Tracing</text>
+  </g>
+
+  <!-- serving edges -->
+  <path class="edge" d="M166,160 L210,160" marker-end="url(#arr)"/>
+  <path class="edge" d="M364,160 L408,160" marker-end="url(#arr)"/>
+  <path class="edge" d="M582,160 L626,160" marker-end="url(#arr)"/>
+  <path class="edge" d="M497,124 C497,108 690,112 690,128" marker-end="url(#arr)"/>
+
+  <!-- ================= QUALITY GATE ================= -->
+  <text x="34" y="268" class="lane">QUALITY GATE  ·  CI</text>
+  <rect x="28" y="276" width="884" height="150" rx="14" fill="#0e1626" stroke="#1d2842"/>
+
+  <g>
+    <rect class="box" x="48"  y="320" width="110" height="56" rx="11"/>
+    <text x="103" y="344" text-anchor="middle" class="lbl">Docs (.md)</text>
+    <text x="103" y="361" text-anchor="middle" class="sub">change-hashed</text>
+
+    <rect class="box" x="196" y="312" width="140" height="72" rx="11"/>
+    <text x="266" y="338" text-anchor="middle" class="lbl">Ingestion</text>
+    <text x="266" y="355" text-anchor="middle" class="sub">chunk · embed</text>
+    <text x="266" y="370" text-anchor="middle" class="sub">→ Qdrant</text>
+
+    <rect class="box" x="374" y="312" width="146" height="72" rx="11"/>
+    <text x="447" y="338" text-anchor="middle" class="lbl">Synthetic QA</text>
+    <text x="447" y="355" text-anchor="middle" class="sub">auto-generated</text>
+    <text x="447" y="370" text-anchor="middle" class="sub">+ feedback cases</text>
+
+    <rect class="box" x="558" y="320" width="120" height="56" rx="11"/>
+    <text x="618" y="344" text-anchor="middle" class="lbl">Ragas eval</text>
+    <text x="618" y="361" text-anchor="middle" class="sub">5 metrics</text>
+
+    <rect class="box" x="716" y="312" width="170" height="72" rx="11"/>
+    <text x="801" y="334" text-anchor="middle" class="lbl">Drift check</text>
+    <text x="801" y="351" text-anchor="middle" class="sub">vs baseline.json</text>
+    <text x="801" y="372" text-anchor="middle" font-size="11" font-weight="700" fill="#2fd6a0">PASS ✓ / FAIL ✗ → CI</text>
+  </g>
+
+  <path class="edge" d="M158,348 L192,348" marker-end="url(#arr)"/>
+  <path class="edge" d="M336,348 L370,348" marker-end="url(#arr)"/>
+  <path class="edge" d="M520,348 L554,348" marker-end="url(#arr)"/>
+  <path class="edge" d="M678,348 L712,348" marker-end="url(#arr)"/>
+
+  <!-- cross-link: ingestion shares Qdrant with serving -->
+  <path class="edge" stroke-dasharray="4 4" d="M266,312 C266,250 690,250 690,190" marker-end="url(#arr)"/>
+  <text x="470" y="244" text-anchor="middle" class="sub" fill="#6b7a92">shared vector store</text>
+</svg>
