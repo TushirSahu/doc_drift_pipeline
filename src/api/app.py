@@ -27,6 +27,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException, status
 
 from src.agentic.controller import AgenticController
 from src.api.models import (
+    FeedbackRequest,
+    FeedbackResponse,
     HealthResponse,
     IngestResponse,
     MetricsResponse,
@@ -133,4 +135,24 @@ def metrics() -> MetricsResponse:
         traces=summarize_traces(),
         embedding_cache=embedding_cache.stats(),
         retrieval_cache=retrieval_cache.stats(),
+    )
+
+
+@app.post("/feedback", response_model=FeedbackResponse, dependencies=[Depends(require_api_key)])
+def feedback(req: FeedbackRequest) -> FeedbackResponse:
+    # Import here to avoid pulling the heavy evaluator package on every import.
+    from src.evaluation.feedback import record_feedback
+
+    entry = record_feedback(
+        question=req.question,
+        answer=req.answer,
+        rating=req.rating,
+        trace_id=req.trace_id,
+        correct_answer=req.correct_answer,
+        comment=req.comment,
+    )
+    return FeedbackResponse(
+        id=entry["id"],
+        rating=entry["rating"],
+        promoted_to_regression=entry["promoted_to_regression"],
     )

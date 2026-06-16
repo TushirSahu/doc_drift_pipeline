@@ -15,6 +15,8 @@ retrieval:
   hybrid_alpha: 0.5
   rerank: false
   rerank_candidates: 10
+  reranker: "cross_encoder"           # "cross_encoder" (bge) or "llm"
+  reranker_model: "BAAI/bge-reranker-base"
 
 evaluation:
   num_questions: 5

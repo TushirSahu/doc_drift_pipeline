@@ -14,7 +14,7 @@ from src.core.cache import make_key, retrieval_cache
 from src.core.settings import cfg
 from src.retrieval.hybrid import bm25_search, hybrid_fuse
 from src.retrieval.mmr import mmr_select
-from src.retrieval.reranker import llm_rerank
+from src.retrieval.reranker import rerank as rerank_candidates
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +94,6 @@ class RetrievalEngine:
             candidates = mmr_select(query_embedding, candidates_with_emb, limit)
 
         if rerank and len(candidates) > limit:
-            candidates = llm_rerank(query, candidates, model_name, limit)
+            candidates = rerank_candidates(query, candidates, limit, model_name=model_name)
 
         return candidates[:limit]
