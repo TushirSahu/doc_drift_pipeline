@@ -35,6 +35,15 @@
   .pill.pass{color:var(--green);border-color:rgba(47,214,160,.35);background:var(--green-bg)}
   .pill.pass .dot{background:var(--green);box-shadow:0 0 10px var(--green)}
 
+  .connbar{display:flex;align-items:center;gap:9px;margin:-6px 0 18px;flex-wrap:wrap}
+  .connbar .conn{font-size:12px;font-weight:600;color:var(--faint);border:1px solid var(--line);
+    background:var(--panel);border-radius:999px;padding:7px 13px;white-space:nowrap}
+  .connbar input{background:#0c121d;border:1px solid var(--line);border-radius:9px;padding:8px 11px;
+    color:var(--text);font-size:12px;font-family:var(--mono);min-width:190px}
+  .connbar button{background:var(--chip);border:1px solid var(--line);color:var(--text);border-radius:9px;
+    padding:8px 15px;cursor:pointer;font-size:12.5px}
+  .connbar button:hover{border-color:var(--accent)}
+
   .grid{display:grid;grid-template-columns:1.55fr 1fr;gap:18px}
   @media(max-width:920px){.grid{grid-template-columns:1fr}}
   .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
@@ -123,6 +132,13 @@
     <div class="pill pass"><span class="dot"></span> Quality gate: passing</div>
   </div>
 
+  <div class="connbar">
+    <span class="conn" id="connDot">○ Demo data</span>
+    <input id="apiBase" placeholder="http://localhost:8000" />
+    <input id="apiKey" placeholder="X-API-Key (optional)" />
+    <button onclick="connect()">Connect to live API</button>
+  </div>
+
   <div class="grid">
     <!-- LEFT: chat -->
     <div class="card">
@@ -161,8 +177,8 @@
   </div>
 
   <div class="foot">
-    Interactive demo with sample data · backed by FastAPI · Qdrant · Ollama · Ragas ·
-    run live with <code>uvicorn src.api.app:app</code>
+    Shows sample data out of the box · click <b>Connect to live API</b> to drive a running
+    backend (<code>uvicorn src.api.app:app</code>) — answers, traces, metrics, and feedback go real.
   </div>
 </div>
 
@@ -255,27 +271,120 @@ function renderAnswer(s){
     </div></div>`;
 }
 
+// ---------- live API state ----------
+const LIVE = { on:false, base:'', key:'' };
+let currentQA = { question:SAMPLES[0].q, answer:SAMPLES[0].answer };
+
+function headers(){ const h={'Content-Type':'application/json'}; if(LIVE.key) h['X-API-Key']=LIVE.key; return h; }
+function esc(s){ return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+function setStatus(on){
+  LIVE.on = on;
+  const el = document.getElementById('connDot');
+  el.textContent = on ? '● Live API' : '○ Demo data';
+  el.style.color = on ? 'var(--green)' : 'var(--faint)';
+  el.style.borderColor = on ? 'rgba(47,214,160,.45)' : 'var(--line)';
+}
+
+async function connect(){
+  LIVE.base = (document.getElementById('apiBase').value.trim() || 'http://localhost:8000').replace(/\/+$/,'');
+  LIVE.key  = document.getElementById('apiKey').value.trim();
+  try{ const r = await fetch(LIVE.base+'/health'); setStatus(r.ok); if(r.ok) loadMetrics(); }
+  catch(e){ setStatus(false); }
+}
+
+// clicking an example chip updates the active feedback target too
+function showSample(i){
+  document.querySelectorAll('.ex').forEach((e,j)=>e.classList.toggle('active',j===i));
+  currentQA = { question:SAMPLES[i].q, answer:SAMPLES[i].answer };
+  renderAnswer(SAMPLES[i]);
+}
+
+function mapLive(q, d){
+  const g = d.guardrails||{};
+  const ans = esc(d.answer).replace(/\[Source:[^\]]*\]/gi, m=>`<span class="cite">${m}</span>`);
+  return {
+    q, answer: ans,
+    grounding: g.grounding_score ?? 0,
+    cited: !!g.has_citation,
+    idk: !!g.is_idk,
+    steps: d.steps ?? (d.tool_calls ? d.tool_calls.length : 0),
+    sources: (d.retrieved_contexts||[]).map((c,i)=>`context ${i+1} · ${esc(c).slice(0,38)}…`),
+    trace: (d.tool_calls||[]).map(t=>({
+      tool: esc(t.tool),
+      args: esc(typeof t.args==='string' ? t.args : JSON.stringify(t.args)),
+      res:  esc((t.result_preview||'').replace(/\s+/g,' ')).slice(0,70)+'…',
+    })),
+  };
+}
+
+function renderLoading(q){
+  document.getElementById('thread').innerHTML =
+    `<div class="msg q"><div class="bubble">${esc(q)}</div></div>
+     <div class="msg a"><div class="bubble"><div class="answer" style="color:var(--muted)">Thinking… running the agent loop</div></div></div>`;
+}
+
+async function ask(){
+  const inp = document.getElementById('qinput');
+  const v = inp.value.trim(); if(!v) return;
+  inp.value='';
+  if(!LIVE.on){ currentQA={question:v, answer:SAMPLES[0].answer}; renderAnswer({...SAMPLES[0], q:v}); return; }
+  renderLoading(v);
+  try{
+    const r = await fetch(LIVE.base+'/query',{method:'POST',headers:headers(),body:JSON.stringify({question:v})});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    currentQA = { question:v, answer:d.answer };
+    renderAnswer(mapLive(v,d));
+    loadMetrics();
+  }catch(e){
+    document.getElementById('thread').innerHTML +=
+      `<div class="msg a"><div class="bubble"><div class="answer" style="color:var(--red)">Request failed: ${esc(e.message)} — is the API running at ${esc(LIVE.base)}?</div></div></div>`;
+  }
+}
+
 function vote(btn,kind){
   document.querySelectorAll('.fb').forEach(b=>b.classList.remove('on'));
   btn.classList.add('on');
   const note = document.getElementById('fbnote');
   note.classList.add('show');
   note.style.color = kind==='up' ? 'var(--green)' : 'var(--accent)';
+  if(LIVE.on){ sendFeedback(kind, note); return; }
   note.textContent = kind==='up'
     ? '✓ Logged to feedback.jsonl'
     : '↳ Promoted to regression_cases.jsonl — this question now guards the drift gate';
 }
 
-function ask(){
-  const v = document.getElementById('qinput').value.trim();
-  if(!v) return;
-  // Demo: route any free-text question to the closest sample answer.
-  renderAnswer({...SAMPLES[0], q:v});
-  document.getElementById('qinput').value='';
+async function sendFeedback(kind, note){
+  try{
+    const r = await fetch(LIVE.base+'/feedback',{method:'POST',headers:headers(),
+      body:JSON.stringify({question:currentQA.question, answer:currentQA.answer, rating:kind})});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    note.textContent = kind==='up'
+      ? `✓ Logged to feedback.jsonl (id ${d.id})`
+      : (d.promoted_to_regression ? '↳ Promoted to regression set — now guards the drift gate' : 'Recorded.');
+  }catch(e){ note.style.color='var(--red)'; note.textContent='Feedback failed: '+esc(e.message); }
 }
+
+async function loadMetrics(){
+  try{
+    const r = await fetch(LIVE.base+'/metrics',{headers:headers()});
+    if(!r.ok) return;
+    const t = (await r.json()).traces||{};
+    if(!t.count) return;
+    const lat = t.latency_ms||{}, k = document.querySelectorAll('.kpi .v');
+    if(lat.p50!=null) k[0].innerHTML = Math.round(lat.p50)+'<small> ms</small>';
+    if(lat.p95!=null) k[1].innerHTML = Math.round(lat.p95)+'<small> ms</small>';
+    if(t.error_rate!=null) k[2].innerHTML = (t.error_rate*100).toFixed(1)+'<small> %</small>';
+    if(t.grounding_pass_rate!=null) k[3].innerHTML = Math.round(t.grounding_pass_rate*100)+'<small> %</small>';
+  }catch(e){}
+}
+
 document.getElementById('qinput').addEventListener('keydown',e=>{if(e.key==='Enter')ask();});
 
 renderExamples(); renderMetrics(); renderAnswer(SAMPLES[0]);
+connect();   // auto-detect a local API on load; falls back to demo data
 </script>
 </body>
 </html>

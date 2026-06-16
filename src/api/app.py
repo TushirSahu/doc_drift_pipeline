@@ -24,6 +24,7 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 
 from src.agentic.controller import AgenticController
 from src.api.models import (
@@ -60,6 +61,16 @@ app = FastAPI(
     version="1.0.0",
     description="Agentic RAG over your documentation, with drift detection.",
     lifespan=lifespan,
+)
+
+# Allow the browser demo (and any frontend) to call the API. For a real
+# deployment, set DOCDRIFT_CORS_ORIGINS to a comma-separated allowlist.
+_cors = os.getenv("DOCDRIFT_CORS_ORIGINS", "*")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"] if _cors == "*" else [o.strip() for o in _cors.split(",")],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -113,6 +124,7 @@ def query(req: QueryRequest) -> QueryResponse:
         answer=result["answer"],
         steps=result["steps"],
         tools_used=result["tools_used"],
+        tool_calls=result.get("tool_calls", []),
         retrieved_contexts=result.get("retrieved_contexts", []),
         guardrails=guard,
         warning=warning,
