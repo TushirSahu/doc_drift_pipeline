@@ -63,15 +63,21 @@ docker run -d -p 6333:6333 qdrant/qdrant      # then set QDRANT_URL=http://local
 python -m src.ingestion.cli --all
 uvicorn src.api.app:app --reload --port 8000
 
-# 4. open the demo and click "Connect to live API"
-open demo/index.html
+# 4. serve the demo over http (file:// can block browser fetches), then connect
+cd demo && python -m http.server 5500       # open http://localhost:5500
 ```
 
 The demo auto-detects the API at `http://localhost:8000` on load; if it's
-running, the status flips to **● Live API** and every question hits `/query`. The
-API ships with CORS enabled for the browser, and exposes the agent's tool calls
-so the live trace is fully detailed. (Use a Qdrant **server** rather than the
-embedded on-disk mode here, since the API and ingestion are separate processes.)
+running, the status flips to **● Live API**, the Knowledge base shows the real
+ingested docs (`GET /sources`), and every question hits `/query`. The API ships
+with CORS enabled and exposes the agent's tool calls so the live trace is fully
+detailed.
+
+> **Serve over http, not `file://`.** Opening `demo/index.html` directly often
+> yields *"Failed to fetch"* because browsers block `file://` → `localhost`
+> requests. Serving it with `python -m http.server` fixes that. Also use a Qdrant
+> **server** (not embedded on-disk mode) here, since the API and ingestion run as
+> separate processes.
 
 ## Architecture
 

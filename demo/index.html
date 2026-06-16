@@ -51,7 +51,18 @@
   .card h3{margin:0 0 14px;font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted)}
 
   /* chat */
-  .examples{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+  .kb{display:flex;flex-wrap:wrap;gap:8px}
+  .kbdoc{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11.5px;
+    color:#cdd9ea;background:var(--chip);border:1px solid var(--line);border-radius:9px;padding:7px 11px}
+  .kbdoc .tag{font-family:var(--sans);font-size:9.5px;font-weight:700;letter-spacing:.5px;
+    padding:2px 6px;border-radius:5px;text-transform:uppercase}
+  .tag.auth{color:#5b8cff;background:rgba(91,140,255,.15)}
+  .tag.payment{color:#2fd6a0;background:rgba(47,214,160,.15)}
+
+  .examples{margin-bottom:16px}
+  .exgroup{margin-bottom:10px}
+  .exlabel{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:var(--faint);margin:10px 0 7px}
+  .exrow{display:flex;flex-wrap:wrap;gap:8px}
   .ex{cursor:pointer;font-size:12.5px;padding:7px 12px;border-radius:999px;border:1px solid var(--line);
     background:var(--chip);color:var(--muted);transition:.15s}
   .ex:hover{color:var(--text);border-color:var(--accent)}
@@ -142,7 +153,10 @@
   <div class="grid">
     <!-- LEFT: chat -->
     <div class="card">
-      <h3>Ask the docs</h3>
+      <h3>Knowledge base</h3>
+      <div class="kb" id="kb"></div>
+
+      <h3 style="margin-top:16px">Try a question</h3>
       <div class="examples" id="examples"></div>
 
       <div id="thread"></div>
@@ -185,6 +199,7 @@
 <script>
 const SAMPLES = [
   {
+    doc: "auth",
     q: "What auth method does v2 use, and how long is an admin session in minutes?",
     answer: `Auth Service v2.0 uses <b>OAuth2 with JWT tokens</b> instead of session cookies. Admin users have a maximum session of 12 hours, which is <b>720 minutes</b>. <span class="cite">[Source: auth_service_v2.md]</span>`,
     grounding: 0.94, cited: true, steps: 2,
@@ -195,6 +210,7 @@ const SAMPLES = [
     ],
   },
   {
+    doc: "auth",
     q: "How do I refresh an access token?",
     answer: `Send a request to the <b>/api/v2/auth/refresh</b> endpoint. Tokens expire after 15 minutes by default, so refresh before then to stay authenticated. <span class="cite">[Source: auth_service_v2.md]</span>`,
     grounding: 0.89, cited: true, steps: 1,
@@ -202,6 +218,7 @@ const SAMPLES = [
     trace: [ {tool:"search_docs", args:`"refresh access token endpoint"`, res:"2 chunks · top score 0.91"} ],
   },
   {
+    doc: "payment",
     q: "How do I process a payment and what fields are required?",
     answer: `Send a <b>POST</b> to <b>/payments/process</b> with a JSON body containing <b>amount</b>, <b>currency</b>, <b>payment_method</b>, <b>card_token</b>, and <b>customer_id</b>. A successful call returns a <b>transaction_id</b> and a <b>success</b> status. <span class="cite">[Source: doc_payment_v2.md]</span>`,
     grounding: 0.93, cited: true, steps: 1,
@@ -209,6 +226,7 @@ const SAMPLES = [
     trace: [ {tool:"search_docs", args:`"process payment endpoint request body"`, res:"2 chunks · top score 0.90"} ],
   },
   {
+    doc: "payment",
     q: "How do I authenticate requests to the Payment API?",
     answer: `All requests require <b>Bearer token</b> authentication in the Authorization header — <b>Authorization: Bearer YOUR_API_KEY</b>. A missing or invalid key returns <b>401 Unauthorized</b>. <span class="cite">[Source: doc_payment_v2.md]</span>`,
     grounding: 0.91, cited: true, steps: 1,
@@ -216,6 +234,7 @@ const SAMPLES = [
     trace: [ {tool:"search_docs", args:`"payment API authentication header bearer"`, res:"2 chunks · top score 0.94"} ],
   },
   {
+    doc: "payment",
     q: "Does the payment API support refunds in euros?",
     answer: `I don't have enough information in the documentation to answer that. The payment docs describe payment processing and transaction endpoints, but don't mention refunds or currency-specific behavior.`,
     grounding: 0.0, cited: false, steps: 1, idk:true,
@@ -240,10 +259,48 @@ function renderMetrics(){
     </div>`).join('');
 }
 
+const DOC_NAME  = { auth:"auth_service_v2.md", payment:"doc_payment_v2.md" };
+const DOC_LABEL = { auth:"Auth Service", payment:"Payment API" };
+
+function trunc(q){ return q.length>46 ? q.slice(0,44)+'…' : q; }
+
 function renderExamples(){
-  document.getElementById('examples').innerHTML = SAMPLES.map((s,i)=>
-    `<div class="ex${i===0?' active':''}" onclick="showSample(${i})">${s.q.length>46?s.q.slice(0,44)+'…':s.q}</div>`
-  ).join('');
+  const groups = {};
+  SAMPLES.forEach((s,i)=>{ (groups[s.doc] = groups[s.doc] || []).push({s,i}); });
+  document.getElementById('examples').innerHTML = ['auth','payment']
+    .filter(d=>groups[d])
+    .map(d=>`
+      <div class="exgroup">
+        <div class="exlabel">${DOC_LABEL[d]}</div>
+        <div class="exrow">${groups[d].map(({s,i})=>
+          `<div class="ex${i===0?' active':''}" onclick="showSample(${i})">${trunc(s.q)}</div>`).join('')}</div>
+      </div>`).join('');
+}
+
+// Knowledge base: which docs are loaded. Offline = the docs the samples cover;
+// live = the real ingested set from GET /sources.
+function renderKB(docs){
+  // docs: [{name, doc}] or plain filenames
+  document.getElementById('kb').innerHTML = docs.map(d=>{
+    const name = d.name || d;
+    const kind = d.doc || (name.includes('payment') ? 'payment' : (name.includes('auth') ? 'auth' : ''));
+    const tag = kind ? `<span class="tag ${kind}">${kind}</span>` : '';
+    return `<span class="kbdoc">📄 ${name}${tag}</span>`;
+  }).join('');
+}
+
+function defaultKB(){
+  const seen = [...new Set(SAMPLES.map(s=>s.doc))];
+  renderKB(seen.map(d=>({name:DOC_NAME[d], doc:d})));
+}
+
+async function loadSources(){
+  try{
+    const r = await fetch(LIVE.base+'/sources',{headers:headers()});
+    if(!r.ok) return;
+    const docs = (await r.json()).documents || [];
+    if(docs.length) renderKB(docs);
+  }catch(e){}
 }
 
 function showSample(i){
@@ -303,7 +360,7 @@ function setStatus(on){
 async function connect(){
   LIVE.base = (document.getElementById('apiBase').value.trim() || 'http://localhost:8000').replace(/\/+$/,'');
   LIVE.key  = document.getElementById('apiKey').value.trim();
-  try{ const r = await fetch(LIVE.base+'/health'); setStatus(r.ok); if(r.ok) loadMetrics(); }
+  try{ const r = await fetch(LIVE.base+'/health'); setStatus(r.ok); if(r.ok){ loadMetrics(); loadSources(); } }
   catch(e){ setStatus(false); }
 }
 
@@ -352,8 +409,13 @@ async function ask(){
     renderAnswer(mapLive(v,d));
     loadMetrics();
   }catch(e){
+    const network = /fetch/i.test(e.message);
+    const msg = network
+      ? `Couldn't reach the API at ${esc(LIVE.base)}. Check: (1) the server is running — <code>curl ${esc(LIVE.base)}/health</code>; (2) open this demo over http (<code>cd demo && python -m http.server 5500</code> → localhost:5500) rather than file://; (3) you're running the latest backend (CORS enabled); (4) Ollama is running.`
+      : `Request failed: ${esc(e.message)}`;
     document.getElementById('thread').innerHTML +=
-      `<div class="msg a"><div class="bubble"><div class="answer" style="color:var(--red)">Request failed: ${esc(e.message)} — is the API running at ${esc(LIVE.base)}?</div></div></div>`;
+      `<div class="msg a"><div class="bubble"><div class="answer" style="color:var(--amber);line-height:1.6">${msg}</div></div></div>`;
+    setStatus(false);
   }
 }
 
@@ -397,7 +459,7 @@ async function loadMetrics(){
 
 document.getElementById('qinput').addEventListener('keydown',e=>{if(e.key==='Enter')ask();});
 
-renderExamples(); renderMetrics(); renderAnswer(SAMPLES[0]);
+defaultKB(); renderExamples(); renderMetrics(); renderAnswer(SAMPLES[0]);
 connect();   // auto-detect a local API on load; falls back to demo data
 </script>
 </body>
