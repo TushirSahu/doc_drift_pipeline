@@ -26,14 +26,37 @@ class CloudVectorStoreManager:
         self.collection_name = collection_name or os.getenv(
             "QDRANT_COLLECTION", "default_collection"
         )
-        self.client = QdrantClient(
-            url=os.getenv("QDRANT_URL"),
-            api_key=os.getenv("QDRANT_API_KEY"),
-        )
+        self.client = self._make_client()
         self.embedder = LocalEmbedder()
         self._corpus_cache: List[str] = []
         self._retriever = RetrievalEngine(self)
         self._ensure_collection_exists()
+
+    @staticmethod
+    def _make_client() -> QdrantClient:
+        """Pick a Qdrant backend from env — remote, on-disk, or in-memory.
+
+        - ``QDRANT_URL`` set  -> connect to a remote/cloud server (production).
+        - ``QDRANT_PATH=:memory:`` -> ephemeral in-memory store (great for tests).
+        - otherwise           -> embedded on-disk store, **no server needed**.
+          Defaults to ``<repo>/qdrant_storage`` (override with ``QDRANT_PATH``).
+
+        Embedded mode lets the whole project run with zero external infra, which
+        is ideal for local dev and demos. (One process may open an on-disk store
+        at a time; use a real server when running the API and pipeline together.)
+        """
+        url = (os.getenv("QDRANT_URL") or "").strip()
+        path = (os.getenv("QDRANT_PATH") or "").strip()
+
+        if url:
+            return QdrantClient(url=url, api_key=os.getenv("QDRANT_API_KEY"))
+        if path == ":memory:":
+            logger.info("Using in-memory Qdrant (data is not persisted).")
+            return QdrantClient(location=":memory:")
+
+        store = path or str(ROOT_DIR / "qdrant_storage")
+        logger.info("Using embedded Qdrant at %s (no server required).", store)
+        return QdrantClient(path=store)
 
     def _ensure_collection_exists(self) -> None:
         collections = self.client.get_collections().collections

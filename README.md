@@ -50,6 +50,19 @@ cp .env.example .env
 python -m src.ingestion.cli --all
 ```
 
+### Vector store modes
+
+DocDrift talks to Qdrant in one of three modes, chosen by env var — no code change:
+
+| Mode | How | When |
+|------|-----|------|
+| **Embedded on-disk** (default) | leave `QDRANT_URL` empty | local dev / demos — **no server or cloud needed** |
+| **In-memory** | `QDRANT_PATH=:memory:` | quick tests (data not persisted) |
+| **Remote / Cloud** | set `QDRANT_URL` (+ `QDRANT_API_KEY`) | production / shared deployments |
+
+Embedded mode stores vectors under `qdrant_storage/` and requires nothing
+running. You still need **Ollama** up (for embeddings + the LLM).
+
 ## Run as a service
 
 ```bash
