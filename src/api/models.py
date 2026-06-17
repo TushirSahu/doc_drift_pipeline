@@ -22,6 +22,7 @@ class QueryResponse(BaseModel):
     answer: str
     steps: int
     tools_used: List[str]
+    tool_calls: List[Dict[str, Any]] = []
     retrieved_contexts: List[str]
     guardrails: GuardrailInfo
     warning: Optional[str] = None
@@ -55,3 +56,7 @@ class FeedbackResponse(BaseModel):
     id: str
     rating: str
     promoted_to_regression: bool
+
+
+class SourcesResponse(BaseModel):
+    documents: List[str]

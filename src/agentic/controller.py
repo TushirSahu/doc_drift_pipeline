@@ -16,6 +16,24 @@ logger = logging.getLogger(__name__)
 TOOL_PATTERN = re.compile(r"TOOL:\s*(\w+)\s*ARGS:\s*(.+)", re.IGNORECASE | re.DOTALL)
 
 
+def _clean_args(raw: str) -> str:
+    """Normalize tool args the model may wrap as JSON / quotes / parens.
+
+    Small models often emit ``["auth.md"]`` or ``("query")`` instead of a plain
+    phrase. Strip the wrapping so search_docs gets a usable query.
+    """
+    raw = raw.strip()
+    # take only the first line — models sometimes append commentary
+    raw = raw.splitlines()[0].strip() if raw else raw
+    for pair in ('()', '[]', '{}'):
+        if raw.startswith(pair[0]) and raw.endswith(pair[1]):
+            raw = raw[1:-1].strip()
+    raw = raw.strip().strip('"\'').strip()
+    # collapse a JSON-list-of-one like "a", "b" -> a b
+    raw = raw.replace('", "', ' ').replace("', '", ' ').strip('"\'')
+    return raw
+
+
 class AgentResult(TypedDict, total=False):
     """Shape of the dict returned by AgenticController.run().
 
@@ -42,9 +60,24 @@ class AgenticController:
         return f"{base}\n\nAvailable tools:\n{tool_descriptions()}"
 
     def _parse_tool_call(self, text: str) -> tuple[str | None, str | None]:
+        # 1) Strict format: "TOOL: <name> ARGS: <args>".
         match = TOOL_PATTERN.search(text)
         if match:
-            return match.group(1).lower().strip(), match.group(2).strip()
+            return match.group(1).lower().strip(), _clean_args(match.group(2))
+
+        # 2) Lenient: small models often drop the "TOOL:" prefix or use call
+        #    syntax. Accept "<tool> ARGS: <args>" or "<tool>(<args>)" for any
+        #    enabled tool, so a malformed tool call still triggers retrieval
+        #    instead of leaking into the final answer.
+        names = "|".join(re.escape(n) for n in self.tools)
+        if names:
+            lenient = re.search(
+                rf"\b({names})\b\s*(?:ARGS:\s*(.+)|\((.+)\))",
+                text, re.IGNORECASE | re.DOTALL,
+            )
+            if lenient:
+                args = lenient.group(2) if lenient.group(2) is not None else lenient.group(3)
+                return lenient.group(1).lower().strip(), _clean_args(args)
         return None, None
 
     def _is_final_answer(self, text: str) -> bool:
