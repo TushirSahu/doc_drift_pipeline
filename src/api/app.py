@@ -24,6 +24,7 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 
 from src.agentic.controller import AgenticController
 from src.api.models import (
@@ -34,6 +35,7 @@ from src.api.models import (
     MetricsResponse,
     QueryRequest,
     QueryResponse,
+    SourcesResponse,
 )
 from src.core.cache import embedding_cache, retrieval_cache
 from src.core.logging import configure_logging
@@ -60,6 +62,16 @@ app = FastAPI(
     version="1.0.0",
     description="Agentic RAG over your documentation, with drift detection.",
     lifespan=lifespan,
+)
+
+# Allow the browser demo (and any frontend) to call the API. For a real
+# deployment, set DOCDRIFT_CORS_ORIGINS to a comma-separated allowlist.
+_cors = os.getenv("DOCDRIFT_CORS_ORIGINS", "*")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"] if _cors == "*" else [o.strip() for o in _cors.split(",")],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -113,6 +125,7 @@ def query(req: QueryRequest) -> QueryResponse:
         answer=result["answer"],
         steps=result["steps"],
         tools_used=result["tools_used"],
+        tool_calls=result.get("tool_calls", []),
         retrieved_contexts=result.get("retrieved_contexts", []),
         guardrails=guard,
         warning=warning,
@@ -127,6 +140,21 @@ def ingest() -> IngestResponse:
     # New docs may change retrieval results — drop the stale cache.
     retrieval_cache.clear()
     return IngestResponse(ingested_chunks=total)
+
+
+@app.get("/sources", response_model=SourcesResponse, dependencies=[Depends(require_api_key)])
+def sources() -> SourcesResponse:
+    """List the documents currently ingested (from the ingest-state file)."""
+    import json
+
+    from src.ingestion.vectorstore import INGEST_STATE_FILE
+
+    docs: list[str] = []
+    if INGEST_STATE_FILE.exists():
+        state = json.loads(INGEST_STATE_FILE.read_text(encoding="utf-8"))
+        for doc_id in state:
+            docs.append(doc_id[5:] if doc_id.startswith("data_") else doc_id)
+    return SourcesResponse(documents=sorted(docs))
 
 
 @app.get("/metrics", response_model=MetricsResponse, dependencies=[Depends(require_api_key)])

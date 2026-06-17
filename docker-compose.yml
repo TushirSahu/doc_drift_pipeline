@@ -1,6 +1,5 @@
-# One-command DocDrift stack: API + Qdrant + Ollama.
-# Why: spins up every dependency together so the whole system runs identically
-# anywhere. `docker compose up` is the entire onboarding/deploy story.
+# DocDrift stack: API + Ollama. Vectors live in Qdrant Cloud (set QDRANT_URL /
+# QDRANT_API_KEY in .env). Ingest into the cloud once before querying.
 #
 # Usage:
 #   docker compose up -d
@@ -9,13 +8,6 @@
 #   curl localhost:8000/health
 
 services:
-  qdrant:
-    image: qdrant/qdrant:latest
-    ports:
-      - "6333:6333"
-    volumes:
-      - qdrant_data:/qdrant/storage
-
   ollama:
     image: ollama/ollama:latest
     ports:
@@ -28,18 +20,17 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - qdrant
       - ollama
     environment:
-      # Point the app at the sibling containers instead of localhost.
-      QDRANT_URL: "http://qdrant:6333"
+      # Vectors live in Qdrant Cloud; Ollama runs as a sibling container.
+      QDRANT_URL: "https://01be690e-c891-4329-bfe6-2102fa6b9909.eu-west-2-0.aws.cloud.qdrant.io"
+      QDRANT_API_KEY: "${QDRANT_API_KEY}"
       QDRANT_COLLECTION: "default_collection"
       OLLAMA_HOST: "http://ollama:11434"
-      DOCDRIFT_API_KEY: "${DOCDRIFT_API_KEY:-changeme}"
+      DOCDRIFT_API_KEY: "${DOCDRIFT_API_KEY}"
     volumes:
       - ./data:/app/data
       - ./metrics:/app/metrics
 
 volumes:
-  qdrant_data:
   ollama_data:
