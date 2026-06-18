@@ -23,6 +23,7 @@ class ModelsCfg(BaseModel):
     llm: str
     embed: str
     provider: Literal["ollama", "openai"] = "ollama"
+    embed_provider: Literal["ollama", "openai", "sentence_transformers"] = "ollama"
     embed_dim: int = Field(default=768, gt=0)
 
 
