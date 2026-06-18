@@ -146,7 +146,10 @@ The serving path is provider-agnostic, so it runs in the cloud without a GPU:
   `OPENAI_BASE_URL` to use any OpenAI-compatible host (OpenAI, Groq, Together).
   Locally it stays on Ollama. Bump `models.embed_dim` to match the embed model.
 - **Vectors** — point `QDRANT_URL` at Qdrant Cloud.
-- **API** — one-click via [`render.yaml`](render.yaml) (Docker); set the secrets.
+- **API** — deploy the Docker image. The container honors `$PORT`, so it runs on
+  **Render** ([`render.yaml`](render.yaml)), or — with **no credit card** —
+  **Hugging Face Spaces** (Docker SDK) or **Koyeb** (deploy from GitHub). Set the
+  secrets (`QDRANT_*`, `OPENAI_*`, `DOCDRIFT_API_KEY`) in the host's dashboard.
 - **Frontend** — deploy [`demo/`](demo) to Vercel as a static site; it calls the
   API and `DOCDRIFT_CORS_ORIGINS` allowlists its origin.
 
