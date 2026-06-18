@@ -14,3 +14,4 @@ fastapi>=0.110.0
 uvicorn>=0.27.0
 httpx>=0.26.0,<0.28
 sentence-transformers>=2.2.0   # cross-encoder reranker (pulls torch; heavy)
+openai>=1.0.0                  # hosted model provider (OpenAI-compatible)
