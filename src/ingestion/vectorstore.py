@@ -59,17 +59,30 @@ class CloudVectorStoreManager:
         return QdrantClient(path=store)
 
     def _ensure_collection_exists(self) -> None:
-        collections = self.client.get_collections().collections
-        exists = any(col.name == self.collection_name for col in collections)
-        if not exists:
-            logger.info("Creating collection '%s'", self.collection_name)
-            self.client.recreate_collection(
-                collection_name=self.collection_name,
-                vectors_config=VectorParams(
-                    size=self.embedder.dimensions,
-                    distance=Distance.COSINE,
-                ),
+        want = self.embedder.dimensions
+        names = {col.name for col in self.client.get_collections().collections}
+
+        if self.collection_name in names:
+            current = None
+            try:
+                current = self.client.get_collection(
+                    self.collection_name
+                ).config.params.vectors.size
+            except Exception:  # noqa: BLE001 - introspection best-effort
+                pass
+            if current == want:
+                return
+            logger.warning(
+                "Collection '%s' dim %s != embedder dim %s — recreating (drops old vectors).",
+                self.collection_name, current, want,
             )
+        else:
+            logger.info("Creating collection '%s' (dim %s)", self.collection_name, want)
+
+        self.client.recreate_collection(
+            collection_name=self.collection_name,
+            vectors_config=VectorParams(size=want, distance=Distance.COSINE),
+        )
 
     def _load_ingest_state(self) -> Dict[str, str]:
         if not INGEST_STATE_FILE.exists():
