@@ -3,8 +3,7 @@ import logging
 import re
 from typing import Any, Dict, List, TypedDict
 
-from ollama import chat
-
+from src.core.llm import chat as llm_chat
 from src.core.prompts import load_prompt
 from src.core.settings import cfg
 from src.agentic.tools import get_enabled_tools, tool_descriptions
@@ -117,9 +116,7 @@ class AgenticController:
 
         for step in range(self.max_steps):
             logger.info("Agent step %d/%d", step + 1, self.max_steps)
-            response = chat(model=self.model_name, messages=messages)
-
-            content = response.message.content.strip()
+            content = llm_chat(messages, model=self.model_name).strip()
 
             tool_name, tool_args = self._parse_tool_call(content)
 

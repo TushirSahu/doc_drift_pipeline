@@ -1,6 +1,9 @@
 models:
   llm: "llama3.2:3b"
   embed: "nomic-embed-text"
+  provider: "ollama"        # "ollama" (local) or "openai" (OpenAI/Groq/Together/vLLM)
+  embed_dim: 768            # 768 for nomic; 1536 for OpenAI text-embedding-3-small
+  # base_url for openai-compatible hosts comes from OPENAI_BASE_URL env
 
 chunking:
   chunk_size: 500

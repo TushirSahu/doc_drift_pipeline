@@ -138,6 +138,18 @@ Every `/query` returns the answer plus a **guardrail verdict** (grounded? cited?
 grounding score) and is recorded as a trace. `/metrics` aggregates p50/p95
 latency, error rate, tool usage, and cache hit-rates.
 
+## Deploy (go live)
+
+The serving path is provider-agnostic, so it runs in the cloud without a GPU:
+
+- **Model** — set `models.provider: openai` (config) + `OPENAI_API_KEY` /
+  `OPENAI_BASE_URL` to use any OpenAI-compatible host (OpenAI, Groq, Together).
+  Locally it stays on Ollama. Bump `models.embed_dim` to match the embed model.
+- **Vectors** — point `QDRANT_URL` at Qdrant Cloud.
+- **API** — one-click via [`render.yaml`](render.yaml) (Docker); set the secrets.
+- **Frontend** — deploy [`demo/`](demo) to Vercel as a static site; it calls the
+  API and `DOCDRIFT_CORS_ORIGINS` allowlists its origin.
+
 ## Evaluate quality & detect drift
 
 ```bash

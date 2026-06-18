@@ -1,0 +1,26 @@
+# Render deploy for the DocDrift API (Docker). One-click: render.com → New →
+# Blueprint → point at this repo. Set the `sync: false` secrets in the dashboard.
+# Vectors come from Qdrant Cloud; the model from any OpenAI-compatible endpoint.
+services:
+  - type: web
+    name: docdrift-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: QDRANT_COLLECTION
+        value: default_collection
+      - key: DOCDRIFT_API_KEY
+        sync: false
+      - key: LLM_PROVIDER
+        value: openai
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_BASE_URL
+        sync: false
+      - key: DOCDRIFT_CORS_ORIGINS
+        sync: false

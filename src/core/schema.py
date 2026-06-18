@@ -19,8 +19,11 @@ from src.core.settings import get_config
 
 
 class ModelsCfg(BaseModel):
+    model_config = {"extra": "allow"}  # base_url and other optional keys
     llm: str
     embed: str
+    provider: Literal["ollama", "openai"] = "ollama"
+    embed_dim: int = Field(default=768, gt=0)
 
 
 class ChunkingCfg(BaseModel):
