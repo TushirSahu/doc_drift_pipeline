@@ -21,6 +21,25 @@ def provider() -> str:
     return (os.getenv("LLM_PROVIDER") or cfg("models", "provider", default="ollama")).lower()
 
 
+def embed_provider() -> str:
+    # Decoupled from the chat provider: HF's router is chat-only, so a cloud
+    # deploy can use HF for chat + local sentence-transformers for embeddings.
+    return (os.getenv("EMBED_PROVIDER") or cfg("models", "embed_provider", default="ollama")).lower()
+
+
+_ST_MODELS: dict = {}
+
+
+def _sentence_transformer(model: str):
+    st = _ST_MODELS.get(model)
+    if st is None:
+        from sentence_transformers import SentenceTransformer  # lazy
+
+        st = SentenceTransformer(model)
+        _ST_MODELS[model] = st
+    return st
+
+
 def _openai_client():
     from openai import OpenAI  # lazy
 
@@ -47,7 +66,11 @@ def chat(messages: List[Dict[str, str]], model: str | None = None, temperature: 
 def embed(text: str, model: str | None = None) -> List[float]:
     """Return the embedding vector for a piece of text."""
     model = model or cfg("models", "embed", default="nomic-embed-text")
-    if provider() == "openai":
+    p = embed_provider()
+    if p in ("sentence_transformers", "st", "local"):
+        # Runs locally on CPU (no embedding API) — ideal for GPU-free hosts.
+        return _sentence_transformer(model).encode(text, normalize_embeddings=True).tolist()
+    if p == "openai":
         resp = _openai_client().embeddings.create(model=model, input=text)
         return resp.data[0].embedding
     from ollama import embeddings as ollama_embeddings  # lazy
