@@ -1,6 +1,10 @@
 models:
-  llm: "llama3.2:3b"
-  embed: "nomic-embed-text"
+  llm: "meta-llama/Llama-3.1-8B-Instruct:cheapest"
+  embed: "BAAI/bge-small-en-v1.5"
+  provider: "openai"        # chat: "ollama" (local) or "openai" (OpenAI/Groq/HF router/vLLM)
+  embed_provider: "sentence_transformers"  # embeddings: "ollama" | "openai" | "sentence_transformers" (local CPU)
+  embed_dim: 384           # 384 bge-small/MiniLM; 768 nomic/bge-base; 1536 OpenAI 3-small
+  # base_url for openai-compatible hosts comes from OPENAI_BASE_URL env
 
 chunking:
   chunk_size: 500
