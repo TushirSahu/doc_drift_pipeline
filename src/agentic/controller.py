@@ -33,6 +33,13 @@ def _clean_args(raw: str) -> str:
     return raw
 
 
+def _word_chunks(text: str):
+    """Yield small chunks (word + space) so a UI can 'type out' the answer."""
+    words = text.split(" ")
+    for i, word in enumerate(words):
+        yield word if i == len(words) - 1 else word + " "
+
+
 class AgentResult(TypedDict, total=False):
     """Shape of the dict returned by AgenticController.run().
 
@@ -91,10 +98,70 @@ class AgenticController:
         result["tools_used"] = sorted({c["tool"] for c in result.get("tool_calls", [])})
         return result
 
+    def _iter(self, question: str):
+        """Core agent loop as a generator.
+
+        Yields ``("step", call_info)`` for each tool call as it happens, then
+        exactly one ``("final", result_dict)``. Both run() and run_stream()
+        consume this, so the loop logic lives in one place.
+        """
+        messages = [
+            {"role": "system", "content": self._system_prompt()},
+            {"role": "user", "content": question},
+        ]
+        tool_calls: List[Dict[str, str]] = []
+        retrieved_chunks: List[str] = []
+
+        for step in range(self.max_steps):
+            logger.info("Agent step %d/%d", step + 1, self.max_steps)
+            content = llm_chat(messages, model=self.model_name).strip()
+            tool_name, tool_args = self._parse_tool_call(content)
+
+            if tool_name and tool_name in self.tools:
+                result = self.tools[tool_name](tool_args)
+                call = {
+                    "step": step + 1,
+                    "tool": tool_name,
+                    "args": tool_args,
+                    "result_preview": result[:300],
+                }
+                tool_calls.append(call)
+                if tool_name == "search_docs":
+                    retrieved_chunks.append(result)
+
+                yield "step", call
+                messages.append({"role": "assistant", "content": content})
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        f"Tool result ({tool_name}):\n{result}\n\n"
+                        "Continue — call another tool if needed, or provide the final answer."
+                    ),
+                })
+                continue
+
+            yield "final", {
+                "answer": content,
+                "steps": step + 1,
+                "tool_calls": tool_calls,
+                "retrieved_contexts": retrieved_chunks,
+            }
+            return
+
+        yield "final", {
+            "answer": "Could not answer within the step limit. Try a simpler question.",
+            "steps": self.max_steps,
+            "tool_calls": tool_calls,
+            "retrieved_contexts": retrieved_chunks,
+        }
+
     def run(self, question: str) -> AgentResult:
         # Trace the whole request so latency/steps/grounding land in traces.jsonl.
         with Tracer("agentic_query") as tracer:
-            result = self._run(question)
+            result: AgentResult = {}
+            for kind, payload in self._iter(question):
+                if kind == "final":
+                    result = payload
             result = self._finalize(result)
             tracer.update(
                 question=question,
@@ -106,52 +173,25 @@ class AgenticController:
             )
             return result
 
-    def _run(self, question: str) -> AgentResult:
-        messages = [
-            {"role": "system", "content": self._system_prompt()},
-            {"role": "user", "content": question},
-        ]
-        tool_calls: List[Dict[str, str]] = []
-        retrieved_chunks: List[str] = []
+    def run_stream(self, question: str):
+        """Stream the answer as events: ``step`` (per tool) → ``token`` → ``done``.
 
-        for step in range(self.max_steps):
-            logger.info("Agent step %d/%d", step + 1, self.max_steps)
-            content = llm_chat(messages, model=self.model_name).strip()
+        The final answer is sent in word chunks so the client can type it out.
+        """
+        final: AgentResult = {}
+        for kind, payload in self._iter(question):
+            if kind == "step":
+                yield {"type": "step", "tool": payload["tool"], "args": payload["args"]}
+            else:
+                final = payload
 
-            tool_name, tool_args = self._parse_tool_call(content)
-
-            if tool_name and tool_name in self.tools:
-                result = self.tools[tool_name](tool_args)
-                tool_calls.append({
-                    "step": step + 1,
-                    "tool": tool_name,
-                    "args": tool_args,
-                    "result_preview": result[:300],
-                })
-                if tool_name == "search_docs":
-                    retrieved_chunks.append(result)
-
-                messages.append({"role": "assistant", "content": content})
-                messages.append({
-                    "role": "user",
-                    "content": (
-                        f"Tool result ({tool_name}):\n{result}\n\n"
-                        "Continue — call another tool if needed, or provide the final answer."
-                    ),
-                })
-                continue
-
-            # No tool call → final answer
-            return {
-                "answer": content,
-                "steps": step + 1,
-                "tool_calls": tool_calls,
-                "retrieved_contexts": retrieved_chunks,
-            }
-
-        return {
-            "answer": "Could not answer within the step limit. Try a simpler question.",
-            "steps": self.max_steps,
-            "tool_calls": tool_calls,
-            "retrieved_contexts": retrieved_chunks,
+        result = self._finalize(final)
+        for chunk in _word_chunks(result["answer"]):
+            yield {"type": "token", "text": chunk}
+        yield {
+            "type": "done",
+            "steps": result["steps"],
+            "tools_used": result["tools_used"],
+            "retrieved_contexts": result.get("retrieved_contexts", []),
+            "guardrails": result["guardrails"],
         }

@@ -23,8 +23,11 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+import json
+
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from src.agentic.controller import AgenticController
 from src.api.models import (
@@ -130,6 +133,16 @@ def query(req: QueryRequest) -> QueryResponse:
         guardrails=guard,
         warning=warning,
     )
+
+
+@app.post("/query/stream", dependencies=[Depends(require_api_key)])
+def query_stream(req: QueryRequest) -> StreamingResponse:
+    """Same as /query but streamed as Server-Sent Events (step → token → done)."""
+    def events():
+        for event in AgenticController().run_stream(req.question):
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(events(), media_type="text/event-stream")
 
 
 @app.post("/ingest", response_model=IngestResponse, dependencies=[Depends(require_api_key)])
