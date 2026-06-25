@@ -19,6 +19,8 @@ retrieval:
   hybrid_alpha: 0.5
   rerank: false
   rerank_candidates: 10
+  multi_query: false        # expand the query into paraphrases and merge results
+  multi_query_count: 3
   reranker: "cross_encoder"           # "cross_encoder" (bge) or "llm"
   reranker_model: "BAAI/bge-reranker-base"
 
