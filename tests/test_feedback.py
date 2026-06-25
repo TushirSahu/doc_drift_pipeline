@@ -1,8 +1,18 @@
 from src.evaluation.feedback import (
+    JsonlFeedbackStore,
+    PostgresFeedbackStore,
+    get_store,
     load_regression_cases,
     record_feedback,
     regression_qa_pairs,
 )
+
+
+def test_get_store_selects_backend(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    assert isinstance(get_store(), JsonlFeedbackStore)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
+    assert isinstance(get_store(), PostgresFeedbackStore)  # lazy: doesn't connect
 
 
 def _paths(tmp_path):
