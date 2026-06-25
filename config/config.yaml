@@ -12,7 +12,7 @@ chunking:
   strategy: "markdown"
 
 retrieval:
-  top_k: 2
+  top_k: 4
   mmr_lambda: 0.5
   use_mmr: false
   use_hybrid: false
