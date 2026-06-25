@@ -56,7 +56,14 @@ def _markdown_chunk(text: str, chunk_size: int, overlap: int) -> List[str]:
     chunks: List[str] = []
 
     for header, body in sections:
-        section_text = f"{header}\n{body}".strip() if header else body.strip()
+        body = body.strip()
+        # Skip header-only sections (e.g. a "## Endpoints" parent whose content
+        # lives in its sub-sections). They embed as near-empty chunks and pollute
+        # retrieval with no information to ground an answer on.
+        if header and not body:
+            continue
+
+        section_text = f"{header}\n{body}".strip() if header else body
         if not section_text:
             continue
 

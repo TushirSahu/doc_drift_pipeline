@@ -119,6 +119,28 @@ class CloudVectorStoreManager:
         self._corpus_cache = texts
         return texts
 
+    def list_documents(self) -> List[str]:
+        """Distinct doc_ids actually present in the collection.
+
+        Source of truth for "what's searchable" — works no matter where
+        ingestion ran (unlike the local ingest-state file).
+        """
+        docs: set[str] = set()
+        offset = None
+        while True:
+            records, offset = self.client.scroll(
+                collection_name=self.collection_name,
+                limit=100,
+                offset=offset,
+                with_payload=True,
+            )
+            for rec in records:
+                if rec.payload and rec.payload.get("doc_id"):
+                    docs.add(rec.payload["doc_id"])
+            if offset is None:
+                break
+        return sorted(docs)
+
     def add_documents(
         self,
         doc_id: str,

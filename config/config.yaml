@@ -12,9 +12,9 @@ chunking:
   strategy: "markdown"
 
 retrieval:
-  top_k: 2
+  top_k: 3
   mmr_lambda: 0.5
-  use_mmr: false
+  use_mmr: true             # drop near-duplicate chunks so context isn't repeated
   use_hybrid: false
   hybrid_alpha: 0.5
   rerank: false
@@ -41,7 +41,7 @@ drift:
   baseline_path: "metrics/baseline.json"
 
 agentic:
-  max_steps: 5
+  max_steps: 3             # fewer re-searches → less duplicated/blended context
   tools:
     - calculator
     - search_docs
