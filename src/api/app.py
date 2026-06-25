@@ -157,17 +157,17 @@ def ingest() -> IngestResponse:
 
 @app.get("/sources", response_model=SourcesResponse, dependencies=[Depends(require_api_key)])
 def sources() -> SourcesResponse:
-    """List the documents currently ingested (from the ingest-state file)."""
-    import json
+    """List documents actually present in the vector store (source of truth)."""
+    from src.ingestion.vectorstore import get_vectorstore
 
-    from src.ingestion.vectorstore import INGEST_STATE_FILE
-
-    docs: list[str] = []
-    if INGEST_STATE_FILE.exists():
-        state = json.loads(INGEST_STATE_FILE.read_text(encoding="utf-8"))
-        for doc_id in state:
-            docs.append(doc_id[5:] if doc_id.startswith("data_") else doc_id)
-    return SourcesResponse(documents=sorted(docs))
+    try:
+        doc_ids = get_vectorstore().list_documents()
+    except Exception as exc:  # noqa: BLE001 - never crash the endpoint
+        logger.warning("Could not list documents: %s", exc)
+        doc_ids = []
+    # Prettify: "data_auth_service_v2.md" -> "auth_service_v2.md"
+    names = sorted({d[5:] if d.startswith("data_") else d for d in doc_ids})
+    return SourcesResponse(documents=names)
 
 
 @app.get("/metrics", response_model=MetricsResponse, dependencies=[Depends(require_api_key)])
