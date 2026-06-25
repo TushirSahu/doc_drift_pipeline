@@ -395,28 +395,71 @@ function renderLoading(q){
      <div class="msg a"><div class="bubble"><div class="answer" style="color:var(--muted)">Thinking… running the agent loop</div></div></div>`;
 }
 
+function citeify(s){ return esc(s).replace(/\[Source:[^\]]*\]/gi, m=>`<span class="cite">${m}</span>`); }
+
 async function ask(){
   const inp = document.getElementById('qinput');
   const v = inp.value.trim(); if(!v) return;
   inp.value='';
   if(!LIVE.on){ currentQA={question:v, answer:SAMPLES[0].answer}; renderAnswer({...SAMPLES[0], q:v}); return; }
-  renderLoading(v);
+  await askStream(v);
+}
+
+// Stream the answer from /query/stream and type it out as tokens arrive.
+async function askStream(q){
+  const thread = document.getElementById('thread');
+  thread.innerHTML =
+    `<div class="msg q"><div class="bubble">${esc(q)}</div></div>
+     <div class="msg a"><div class="bubble">
+       <div class="srcchips" id="streamSteps" style="color:var(--faint);font-size:12px;margin-bottom:8px"></div>
+       <div class="answer" id="streamAns" style="color:var(--muted)">Thinking…</div>
+     </div></div>`;
+  let answer = "", steps = [], done = null;
   try{
-    const r = await fetch(LIVE.base+'/query',{method:'POST',headers:headers(),body:JSON.stringify({question:v})});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const d = await r.json();
-    currentQA = { question:v, answer:d.answer };
-    renderAnswer(mapLive(v,d));
+    const r = await fetch(LIVE.base+'/query/stream', {method:'POST', headers:headers(), body:JSON.stringify({question:q})});
+    if(!r.ok || !r.body) throw new Error('HTTP '+r.status);
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    while(true){
+      const {value, done:rdone} = await reader.read(); if(rdone) break;
+      buf += dec.decode(value, {stream:true});
+      let i;
+      while((i = buf.indexOf("\n\n")) >= 0){
+        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 2);
+        if(!line.startsWith("data:")) continue;
+        const ev = JSON.parse(line.slice(5).trim());
+        if(ev.type === "step"){
+          steps.push(ev);
+          document.getElementById('streamSteps').textContent = "⚙ " + steps.map(s=>s.tool).join(" → ");
+        } else if(ev.type === "token"){
+          answer += ev.text;
+          const el = document.getElementById('streamAns');
+          el.style.color = "var(--text)"; el.innerHTML = citeify(answer);
+        } else if(ev.type === "done"){ done = ev; }
+      }
+    }
+    currentQA = {question:q, answer};
+    renderAnswer(mapStream(q, answer, done, steps));
     loadMetrics();
   }catch(e){
     const network = /fetch/i.test(e.message);
-    const msg = network
-      ? `Couldn't reach the API at ${esc(LIVE.base)}. Check: (1) the server is running — <code>curl ${esc(LIVE.base)}/health</code>; (2) open this demo over http (<code>cd demo && python -m http.server 5500</code> → localhost:5500) rather than file://; (3) you're running the latest backend (CORS enabled); (4) Ollama is running.`
-      : `Request failed: ${esc(e.message)}`;
     document.getElementById('thread').innerHTML +=
-      `<div class="msg a"><div class="bubble"><div class="answer" style="color:var(--amber);line-height:1.6">${msg}</div></div></div>`;
+      `<div class="msg a"><div class="bubble"><div class="answer" style="color:var(--amber);line-height:1.6">${
+        network ? `Couldn't reach ${esc(LIVE.base)} — check the API is running, CORS is set, and you're on http (not file://).`
+                : 'Request failed: '+esc(e.message)}</div></div></div>`;
     setStatus(false);
   }
+}
+
+function mapStream(q, answer, done, steps){
+  const g = (done && done.guardrails) || {};
+  return {
+    q, answer: citeify(answer),
+    grounding: g.grounding_score ?? 0, cited: !!g.has_citation, idk: !!g.is_idk,
+    steps: (done && done.steps) ?? steps.length,
+    sources: ((done && done.retrieved_contexts) || []).map((c,i)=>`context ${i+1} · ${esc(c).slice(0,38)}…`),
+    trace: steps.map(s=>({tool:esc(s.tool), args:esc(typeof s.args==='string'?s.args:JSON.stringify(s.args)), res:'(streamed)'})),
+  };
 }
 
 function vote(btn,kind){
