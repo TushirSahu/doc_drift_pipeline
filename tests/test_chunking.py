@@ -1,6 +1,15 @@
 from src.ingestion.chunking import _split_by_headers, chunk_text
 
 
+def test_skips_header_only_sections():
+    # "## Endpoints" has no body (content lives in subsections) — it must not
+    # become its own near-empty chunk.
+    text = "## Endpoints\n\n### Process Payment\n\nPOST /payments/process here."
+    chunks = chunk_text(text, chunk_size=500, overlap=50)
+    assert all("Process Payment" in c or len(c.split()) > 3 for c in chunks)
+    assert not any(c.strip() == "## Endpoints" for c in chunks)
+
+
 def test_word_chunk_splits_long_document():
     text = " ".join(["word"] * 600)
     chunks = chunk_text(text, chunk_size=100, overlap=10)
