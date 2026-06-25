@@ -36,20 +36,31 @@ class RetrievalEngine:
         use_mmr = use_mmr if use_mmr is not None else cfg("retrieval", "use_mmr", default=False)
         use_hybrid = use_hybrid if use_hybrid is not None else cfg("retrieval", "use_hybrid", default=False)
         rerank = rerank if rerank is not None else cfg("retrieval", "rerank", default=False)
+        multi_query = cfg("retrieval", "multi_query", default=False)
         model_name = model_name or cfg("models", "llm", default="llama3.2:3b")
 
         # Identical (query, params) → identical result until docs change.
         cache_key = make_key(
             "retrieve", self.vs.collection_name, query, limit,
-            use_mmr, use_hybrid, rerank, model_name,
+            use_mmr, use_hybrid, rerank, multi_query, model_name,
         )
         cached = retrieval_cache.get(cache_key)
         if cached is not None:
             return cached
 
-        result = self._retrieve_uncached(
-            query, limit, use_mmr, use_hybrid, rerank, model_name
-        )
+        if multi_query:
+            # Retrieve for each rephrasing, then merge unique chunks.
+            from src.retrieval.rewrite import expand_query, merge_unique
+
+            per_query = [
+                self._retrieve_uncached(q, limit, use_mmr, use_hybrid, rerank, model_name)
+                for q in expand_query(query, model=model_name)
+            ]
+            result = merge_unique(per_query, limit)
+        else:
+            result = self._retrieve_uncached(
+                query, limit, use_mmr, use_hybrid, rerank, model_name
+            )
         retrieval_cache.set(cache_key, result)
         return result
 
