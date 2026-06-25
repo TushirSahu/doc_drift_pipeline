@@ -43,6 +43,8 @@ class RetrievalCfg(BaseModel):
     rerank_candidates: int = Field(gt=0)
     reranker: Literal["cross_encoder", "llm"] = "cross_encoder"
     reranker_model: str = "BAAI/bge-reranker-base"
+    multi_query: bool = False
+    multi_query_count: int = Field(default=3, gt=0)
 
 
 class EvaluationCfg(BaseModel):

@@ -1,3 +1,10 @@
+---
+title: DocDrift
+emoji: 🔎
+sdk: docker
+app_port: 8000
+pinned: false
+---
 <div align="center">
 
 # DocDrift
@@ -183,8 +190,8 @@ A daily scheduled run ships in `.github/workflows/scheduled-reingest.yml`.
 
 Real failures are the most valuable test cases. A thumbs-down on `/feedback`
 promotes that question into a regression set; if the user supplies a correction
-it becomes a gold reference answer. Fold them into the gate so a fixed failure
-stays fixed:
+it becomes a gold reference answer. Stored in JSONL by default, or **Postgres**
+when `DATABASE_URL` is set. Fold them into the gate so a fixed failure stays fixed:
 
 ```bash
 python pipeline.py --include-regressions
