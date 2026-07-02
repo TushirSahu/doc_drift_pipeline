@@ -1,0 +1,12 @@
+.git
+.github
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.vscode
+.env
+metrics/traces.jsonl
+metrics/latest_eval.csv
+FEATURE_PLAN.md

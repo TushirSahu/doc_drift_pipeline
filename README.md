@@ -1,37 +1,235 @@
-# 🚀 DocDrift: Automated Documentation Drift Detection
-
-> An LLMOps pipeline designed to detect semantic drift in technical documentation before it breaks your production RAG systems.
-
-DocDrift automates the validation of technical documentation. It ingests new documentation, generates synthetic ground-truth data, and runs a localized Retrieval-Augmented Generation (RAG) evaluation to ensure your AI systems can still accurately interpret your updated docs.
-
-## ✨ Core Capabilities
-
-* **Synthetic Data Generation:** Automatically generates high-quality QA pairs directly from raw markdown using local LLMs.
-* **Semantic Vector Retrieval:** Embeds and retrieves context using modern dense vector search via Qdrant Cloud.
-* **Continuous LLM Evaluation:** Strictly scores RAG performance using the **Ragas** framework to monitor *Faithfulness*, *Answer Relevancy*, and *Context Precision*.
-* **CI/CD Integration Ready:** Designed to run in automated pipelines (like GitHub Actions) to block Pull Requests if documentation updates cause RAG performance to drop below acceptable thresholds.
-
-## 🛠️ Tech Stack
-
-* **Orchestration:** LangChain
-* **Evaluation Framework:** Ragas
-* **Vector Database:** Qdrant Cloud
-* **Local LLM Engine:** Ollama (`llama3.2:1b`)
-* **Embedding Model:** Nomic AI (`nomic-embed-text`)
-
 ---
+title: DocDrift
+emoji: 🔎
+sdk: docker
+app_port: 8000
+pinned: false
+---
+<div align="center">
 
-## 🚀 Quick Start
+# DocDrift
 
-### 1. Environment Setup
+### Agentic RAG over your documentation — grounded, evaluated, and drift-gated.
 
-Clone the repository and spin up a clean, isolated environment to prevent dependency conflicts:
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-service-009688?logo=fastapi&logoColor=white)
+![Qdrant](https://img.shields.io/badge/Qdrant-vectors-DC244C)
+![Ragas](https://img.shields.io/badge/Ragas-evaluation-7c5cff)
+![CI](https://img.shields.io/badge/CI-drift--gated-2fd6a0)
+
+</div>
+
+DocDrift answers questions about your docs using an agentic RAG service — and,
+more importantly, it **knows when it has gotten worse**. It auto-generates a test
+set, scores every answer with Ragas, and **fails the build when a doc, prompt, or
+config change causes a measurable quality regression** ("documentation drift").
+
+<div align="center">
+
+![DocDrift demo](docs/images/demo-preview.svg)
+
+</div>
+
+## Highlights
+
+- **Agentic RAG** — the LLM drives a loop and calls retrieval, search, and a
+  calculator as tools; it can re-query and multi-hop instead of a one-shot pipe.
+- **Answer guardrails** — every answer gets a grounding score + citation check, so
+  hallucinated or unsourced answers are flagged, not shipped.
+- **Drift gate in CI** — synthetic QA + Ragas metrics compared to a committed
+  baseline; a regression fails the build.
+- **Production serving** — FastAPI service, config validation, retries/backoff,
+  embedding & retrieval caching, and per-request tracing (p50/p95, error rate).
+- **Strong retrieval** — dense search + BM25 hybrid + MMR + a **cross-encoder
+  reranker** (`BAAI/bge-reranker-base`).
+- **Human feedback flywheel** — thumbs-down answers become regression test cases
+  that the drift gate must keep passing.
+- **Runs anywhere** — embedded on-disk Qdrant by default (no server/cloud needed).
+
+## Demo
+
+An interactive demo lives in [`demo/index.html`](demo/index.html) — open it in a
+browser to click through sample questions, grounding badges, citations, the agent
+trace, and the metrics panel (great for a screen recording). The image above is
+rendered from it.
+
+### Run it for real
+
+The same page can drive a **live backend** — real answers, real agent traces,
+real metrics, and feedback that actually writes to disk:
 
 ```bash
-git clone [https://github.com/TushirSahu/doc_drift_pipeline.git](https://github.com/TushirSahu/doc_drift_pipeline.git)
-cd doc_drift_pipeline
+# 1. start the model server and pull the models
+ollama serve &
+ollama pull llama3.2:3b && ollama pull nomic-embed-text
 
-conda create -n doc-drift python=3.11 -y
-conda activate doc-drift
+# 2. start Qdrant as a server (so ingestion + API can share it)
+docker run -d -p 6333:6333 qdrant/qdrant      # then set QDRANT_URL=http://localhost:6333 in .env
 
+# 3. ingest the docs, then start the API
+python -m src.ingestion.cli --all
+uvicorn src.api.app:app --reload --port 8000
+
+# 4. serve the demo over http (file:// can block browser fetches), then connect
+cd demo && python -m http.server 5500       # open http://localhost:5500
+```
+
+The demo auto-detects the API at `http://localhost:8000` on load; if it's
+running, the status flips to **● Live API**, the Knowledge base shows the real
+ingested docs (`GET /sources`), and every question hits `/query`. The API ships
+with CORS enabled and exposes the agent's tool calls so the live trace is fully
+detailed.
+
+> **Serve over http, not `file://`.** Opening `demo/index.html` directly often
+> yields *"Failed to fetch"* because browsers block `file://` → `localhost`
+> requests. Serving it with `python -m http.server` fixes that. Also use a Qdrant
+> **server** (not embedded on-disk mode) here, since the API and ingestion run as
+> separate processes.
+
+## Architecture
+
+Two halves work together: a **serving path** that answers questions, and a
+**quality gate** that continuously proves those answers are good.
+
+![Architecture](docs/images/architecture.svg)
+
+```
+src/
+├── core/          # config + validation, retry/backoff, caching, logging
+├── ingestion/     # markdown chunking, embedding, Qdrant vector store
+├── retrieval/     # dense search + MMR, hybrid (BM25), cross-encoder rerank
+├── agentic/       # agent loop, whitelisted tools, answer guardrails
+├── evaluation/    # synthetic QA, Ragas metrics, drift gate, feedback
+├── observability/ # per-request tracing + aggregate stats
+├── automation/    # change detection → auto re-ingest → re-eval
+└── api/           # FastAPI: /health /query /ingest /metrics /feedback
+```
+
+## Quick start
+
+```bash
 pip install -r requirements.txt
+cp .env.example .env
+python -m src.ingestion.cli --all          # ingest the docs
+python -m src.agentic.cli "What auth method does v2 use?"
+```
+
+### Vector store modes
+
+Chosen by env var — no code change:
+
+| Mode | How | When |
+|------|-----|------|
+| **Embedded on-disk** (default) | leave `QDRANT_URL` empty | local dev / demos — **no server or cloud** |
+| **In-memory** | `QDRANT_PATH=:memory:` | quick tests (not persisted) |
+| **Remote / Cloud** | set `QDRANT_URL` (+ `QDRANT_API_KEY`) | production / shared deploys |
+
+Embedded mode requires nothing running. You still need **Ollama** for embeddings
+and the LLM (`ollama pull llama3.2:3b nomic-embed-text`).
+
+## Run as a service
+
+```bash
+uvicorn src.api.app:app --reload --port 8000          # local
+# or the full stack:
+docker compose up -d                                  # api + qdrant + ollama
+```
+
+```bash
+curl -X POST localhost:8000/query \
+  -H 'Content-Type: application/json' \
+  -d '{"question": "How long is an admin session in minutes?"}'
+```
+
+Every `/query` returns the answer plus a **guardrail verdict** (grounded? cited?
+grounding score) and is recorded as a trace. `/metrics` aggregates p50/p95
+latency, error rate, tool usage, and cache hit-rates.
+
+## Deploy (go live)
+
+The serving path is provider-agnostic, so it runs in the cloud without a GPU:
+
+- **Model** — set `models.provider: openai` (config) + `OPENAI_API_KEY` /
+  `OPENAI_BASE_URL` to use any OpenAI-compatible host (OpenAI, Groq, Together).
+  Locally it stays on Ollama. Bump `models.embed_dim` to match the embed model.
+- **Vectors** — point `QDRANT_URL` at Qdrant Cloud.
+- **API** — deploy the Docker image. The container honors `$PORT`, so it runs on
+  **Render** ([`render.yaml`](render.yaml)), or — with **no credit card** —
+  **Hugging Face Spaces** (Docker SDK) or **Koyeb** (deploy from GitHub). Set the
+  secrets (`QDRANT_*`, `OPENAI_*`, `DOCDRIFT_API_KEY`) in the host's dashboard.
+- **Frontend** — deploy [`demo/`](demo) to Vercel as a static site; it calls the
+  API and `DOCDRIFT_CORS_ORIGINS` allowlists its origin.
+
+## Evaluate quality & detect drift
+
+```bash
+python pipeline.py                      # synthetic QA → Ragas → fail on drift
+python pipeline.py --set-baseline       # record current scores as the baseline
+python pipeline.py --compare-agentic    # naive vs. agentic RAG, same questions
+python pipeline.py --compare-retrievers # top_k / MMR / hybrid side by side
+```
+
+The same evaluation runs in CI on every push that touches docs, code, or config.
+If faithfulness drops below threshold or any metric regresses past the baseline,
+the build fails — so drift is caught before it ships.
+
+## Continuous re-ingestion
+
+Drift detection shouldn't wait for a human. The automation layer detects which
+docs changed (by content hash), re-ingests only those, re-runs the evaluation,
+and reports drift:
+
+```bash
+python -m src.automation.cli --once     # cron/CI; exit 1 on drift, 2 on failure
+python -m src.automation.cli --watch    # local file watcher
+```
+
+A daily scheduled run ships in `.github/workflows/scheduled-reingest.yml`.
+
+## Feedback flywheel
+
+Real failures are the most valuable test cases. A thumbs-down on `/feedback`
+promotes that question into a regression set; if the user supplies a correction
+it becomes a gold reference answer. Stored in JSONL by default, or **Postgres**
+when `DATABASE_URL` is set. Fold them into the gate so a fixed failure stays fixed:
+
+```bash
+python pipeline.py --include-regressions
+```
+
+## Agentic vs. naive RAG
+
+Naive RAG retrieves once and answers. The agentic controller lets the LLM decide
+*what to do next* — search again with a refined query, run a calculator, or
+combine multiple rounds before answering.
+
+| | Naive RAG | Agentic RAG |
+|--|-----------|-------------|
+| Flow | retrieve once → answer | LLM decides each step |
+| Multi-hop | can't re-search | re-queries with refined terms |
+| Tools | none | `search_docs`, `calculator`, … |
+| Control | fixed pipeline | the LLM is the controller |
+
+## Production engineering
+
+| Capability | Why it matters |
+|------------|----------------|
+| **REST API** | Lets other systems use DocDrift, not just a human at a terminal |
+| **Config validation** | Fails fast on a bad `config.yaml` instead of silent wrong defaults |
+| **Retry / backoff** | Transient Ollama/Qdrant blips retry instead of failing the request |
+| **Caching** | Deterministic embeddings + repeat queries served from memory |
+| **Tracing** | Debug any answer; alert on p95 latency / error rate |
+| **Guardrails** | Flags ungrounded or uncited answers instead of shipping hallucinations |
+| **Cross-encoder reranker** | Production-grade retrieval accuracy over bi-encoder similarity |
+| **Drift gate** | CI blocks quality regressions from doc or prompt changes |
+| **Feedback flywheel** | Real-world failures become permanent regression tests |
+
+## Tech stack
+
+Python · FastAPI · Qdrant · Ollama (local LLM + embeddings) · Ragas · BM25 ·
+sentence-transformers · Pydantic · pytest · GitHub Actions · Docker Compose.
+
+## Roadmap
+
+Source connectors (Confluence/Notion), prompt & model A/B evaluation, streaming
+responses with conversation memory, and per-request token/cost accounting.

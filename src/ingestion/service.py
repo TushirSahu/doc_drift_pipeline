@@ -1,0 +1,49 @@
+import glob
+import logging
+from pathlib import Path
+
+from src.core.identity import doc_id_for
+from src.core.settings import ROOT_DIR, cfg
+from src.ingestion.vectorstore import CloudVectorStoreManager, get_vectorstore
+
+logger = logging.getLogger(__name__)
+
+
+def ingest_file(db: CloudVectorStoreManager, file_path: str, force: bool = False) -> int:
+    path = Path(file_path)
+    if not path.exists():
+        logger.error("File not found: %s", file_path)
+        return 0
+
+    text = path.read_text(encoding="utf-8")
+    version = path.stem.split("_")[-1] if "_" in path.stem else "v1"
+
+    return db.add_documents(
+        doc_id=doc_id_for(path),
+        text=text,
+        metadata={"source": str(path), "version": version},
+        skip_if_unchanged=not force,
+    )
+
+
+def ingest_all(data_dir: str | None = None, force: bool = False) -> int:
+    """Ingest every markdown file under ``data_dir``.
+
+    ``force=True`` re-embeds even unchanged docs — needed after switching vector
+    stores (e.g. cloud → embedded), where the saved ingest-state would otherwise
+    skip docs that the new, empty store doesn't actually have.
+    """
+    data_dir = data_dir or cfg("paths", "data_dir", default="data")
+    pattern = str(ROOT_DIR / data_dir / "**" / "*.md")
+    files = glob.glob(pattern, recursive=True)
+    if not files:
+        logger.warning("No markdown files found in %s", data_dir)
+        return 0
+
+    db = get_vectorstore()
+    total = 0
+    for file_path in files:
+        chunks = ingest_file(db, file_path, force=force)
+        total += chunks
+        logger.info("Ingested %s (%d chunks)", file_path, chunks)
+    return total
