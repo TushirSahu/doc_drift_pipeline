@@ -55,6 +55,9 @@ paths:
 prompts:
   version: "v1"
 
+api:
+  rate_limit_per_min: 60    # per-IP; makes a keyless public demo safe (0 disables)
+
 guardrails:
   min_grounding: 0.3       # answers below this overlap with context are flagged
   require_citation: true   # final answer must include [Source: ...]
