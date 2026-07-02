@@ -20,3 +20,4 @@ __pycache__/
 FEATURE_PLAN.md
 INTERVIEW_GUIDE.md
 PR_DESCRIPTION.md
+*.md    
