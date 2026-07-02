@@ -24,10 +24,14 @@ import os
 from contextlib import asynccontextmanager
 
 import json
+import time
+from collections import defaultdict, deque
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+
+from src.core.settings import cfg
 
 from src.agentic.controller import AgenticController
 from src.api.models import (
@@ -76,6 +80,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Simple per-IP rate limit (fixed 60s window) so a keyless public demo is safe.
+# Set api.rate_limit_per_min in config (0 disables). In-memory, per process.
+_RL: dict = defaultdict(deque)
+
+
+@app.middleware("http")
+async def _rate_limit(request, call_next):
+    limit = cfg("api", "rate_limit_per_min", default=0)
+    if limit and request.url.path != "/health":
+        ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        hits = _RL[ip]
+        while hits and now - hits[0] > 60:
+            hits.popleft()
+        if len(hits) >= limit:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Rate limit exceeded — try again shortly."},
+            )
+        hits.append(now)
+    return await call_next(request)
 
 
 def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
