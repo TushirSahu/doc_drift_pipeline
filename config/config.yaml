@@ -1,0 +1,77 @@
+models:
+  llm: "meta-llama/Llama-3.1-8B-Instruct:cheapest"
+  embed: "BAAI/bge-small-en-v1.5"
+  provider: "openai"        # chat: "ollama" (local) or "openai" (OpenAI/Groq/HF router/vLLM)
+  embed_provider: "sentence_transformers"  # embeddings: "ollama" | "openai" | "sentence_transformers" (local CPU)
+  embed_dim: 384           # 384 bge-small/MiniLM; 768 nomic/bge-base; 1536 OpenAI 3-small
+  # base_url for openai-compatible hosts comes from OPENAI_BASE_URL env
+
+chunking:
+  chunk_size: 500
+  overlap: 50
+  strategy: "markdown"
+
+retrieval:
+  top_k: 3
+  mmr_lambda: 0.5
+  use_mmr: true             # drop near-duplicate chunks so context isn't repeated
+  use_hybrid: false
+  hybrid_alpha: 0.5
+  rerank: false
+  rerank_candidates: 10
+  multi_query: false        # expand the query into paraphrases and merge results
+  multi_query_count: 3
+  reranker: "cross_encoder"           # "cross_encoder" (bge) or "llm"
+  reranker_model: "BAAI/bge-reranker-base"
+
+evaluation:
+  num_questions: 5
+  metrics:
+    - faithfulness
+    - answer_relevancy
+    - context_precision
+    - context_recall
+    - answer_correctness
+  timeout: 600
+  max_workers: 1
+
+drift:
+  faithfulness_threshold: 0.8
+  regression_threshold: 0.05
+  baseline_path: "metrics/baseline.json"
+
+agentic:
+  max_steps: 3             # fewer re-searches → less duplicated/blended context
+  tools:
+    - calculator
+    - search_docs
+  # web_search is available but disabled by default (stub only)
+
+paths:
+  data_dir: "data"
+  metrics_dir: "metrics"
+  prompts_dir: "prompts"
+
+prompts:
+  version: "v1"
+
+api:
+  rate_limit_per_min: 60    # per-IP; makes a keyless public demo safe (0 disables)
+
+guardrails:
+  min_grounding: 0.3       # answers below this overlap with context are flagged
+  require_citation: true   # final answer must include [Source: ...]
+
+cache:
+  embedding_maxsize: 2048
+  embedding_ttl: 86400     # embeddings are deterministic — cache for a day
+  retrieval_maxsize: 512
+  retrieval_ttl: 600       # results invalidated on re-ingest
+
+resilience:
+  attempts: 3              # retries for Ollama/Qdrant calls
+  base_delay: 0.5
+
+automation:
+  watch_interval: 30       # seconds between polls in `--watch` mode
+  fail_on_drift: true      # `--once` exits non-zero when drift is detected

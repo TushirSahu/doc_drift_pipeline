@@ -1,0 +1,36 @@
+# DocDrift stack: API + Ollama. Vectors live in Qdrant Cloud (set QDRANT_URL /
+# QDRANT_API_KEY in .env). Ingest into the cloud once before querying.
+#
+# Usage:
+#   docker compose up -d
+#   docker compose exec ollama ollama pull llama3.2:3b
+#   docker compose exec ollama ollama pull nomic-embed-text
+#   curl localhost:8000/health
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    depends_on:
+      - ollama
+    environment:
+      # Vectors live in Qdrant Cloud; Ollama runs as a sibling container.
+      QDRANT_URL: "https://01be690e-c891-4329-bfe6-2102fa6b9909.eu-west-2-0.aws.cloud.qdrant.io"
+      QDRANT_API_KEY: "${QDRANT_API_KEY}"
+      QDRANT_COLLECTION: "default_collection"
+      OLLAMA_HOST: "http://ollama:11434"
+      DOCDRIFT_API_KEY: "${DOCDRIFT_API_KEY}"
+    volumes:
+      - ./data:/app/data
+      - ./metrics:/app/metrics
+
+volumes:
+  ollama_data:
