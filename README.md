@@ -1,10 +1,3 @@
----
-title: DocDrift
-emoji: 🔎
-sdk: docker
-app_port: 8000
-pinned: false
----
 <div align="center">
 
 # DocDrift
