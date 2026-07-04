@@ -25,7 +25,7 @@ from contextlib import asynccontextmanager
 
 import json
 import time
-from collections import defaultdict, deque
+from collections import OrderedDict, deque
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -81,9 +81,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Simple per-IP rate limit (fixed 60s window) so a keyless public demo is safe.
-# Set api.rate_limit_per_min in config (0 disables). In-memory, per process.
-_RL: dict = defaultdict(deque)
+# Per-IP rate limit (fixed 60s window) so a keyless public demo is safe.
+# Bounded LRU of IPs so memory can't grow without limit. Per-process; for
+# multi-instance use a shared store (Redis). Set api.rate_limit_per_min (0 disables).
+_RL_MAX_IPS = 10_000
+_RL: "OrderedDict[str, deque]" = OrderedDict()
 
 
 @app.middleware("http")
@@ -92,7 +94,11 @@ async def _rate_limit(request, call_next):
     if limit and request.url.path != "/health":
         ip = request.client.host if request.client else "unknown"
         now = time.time()
-        hits = _RL[ip]
+        hits = _RL.get(ip)
+        if hits is None:
+            hits = deque()
+            _RL[ip] = hits
+        _RL.move_to_end(ip)  # mark recently used
         while hits and now - hits[0] > 60:
             hits.popleft()
         if len(hits) >= limit:
@@ -101,6 +107,8 @@ async def _rate_limit(request, call_next):
                 content={"detail": "Rate limit exceeded — try again shortly."},
             )
         hits.append(now)
+        while len(_RL) > _RL_MAX_IPS:   # evict least-recently-used IPs
+            _RL.popitem(last=False)
     return await call_next(request)
 
 

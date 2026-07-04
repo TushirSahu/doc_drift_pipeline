@@ -30,13 +30,26 @@ _SAFE_OPS = {
 }
 
 
+# Guard against resource-exhaustion via giant powers, e.g. 9**9**9.
+_MAX_POW_EXP = 100
+_MAX_MAGNITUDE = 1e100
+
+
 def _safe_eval(node: ast.AST) -> float:
     if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
         return float(node.value)
     if isinstance(node, ast.UnaryOp) and type(node.op) in _SAFE_OPS:
         return _SAFE_OPS[type(node.op)](_safe_eval(node.operand))
     if isinstance(node, ast.BinOp) and type(node.op) in _SAFE_OPS:
-        return _SAFE_OPS[type(node.op)](_safe_eval(node.left), _safe_eval(node.right))
+        left, right = _safe_eval(node.left), _safe_eval(node.right)
+        if isinstance(node.op, ast.Pow) and (
+            abs(right) > _MAX_POW_EXP or abs(left) > _MAX_MAGNITUDE
+        ):
+            raise ValueError("operands too large")
+        result = _SAFE_OPS[type(node.op)](left, right)
+        if abs(result) > _MAX_MAGNITUDE:
+            raise ValueError("result too large")
+        return result
     raise ValueError("Unsupported expression")
 
 

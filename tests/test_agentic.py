@@ -12,6 +12,14 @@ def test_calculator_rejects_unsafe_code():
     assert "error" in result.lower()
 
 
+def test_calculator_rejects_huge_power():
+    # Resource-exhaustion guard: must not try to compute 9**9**9.
+    assert "error" in calculator("9**9**9").lower()
+    assert "error" in calculator("10**500").lower()
+    # normal powers still work
+    assert calculator("2 ** 10") == "1024.0"
+
+
 def test_tool_pattern_parses_search_call():
     text = "TOOL: search_docs ARGS: auth token expiry"
     match = TOOL_PATTERN.search(text)
