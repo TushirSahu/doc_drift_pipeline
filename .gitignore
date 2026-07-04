@@ -5,6 +5,8 @@ docs/*
 # Runtime metrics & traces — but keep the committed drift baseline
 metrics/*
 !metrics/baseline.json
+!docs/images/architecture.svg
+!docs/images/demo-preview.svg
 
 # Embedded Qdrant on-disk store
 qdrant_storage/
