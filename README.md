@@ -1,3 +1,11 @@
+<!-- ---
+title: DocDrift
+emoji: 🔎
+sdk: docker
+app_port: 8000
+pinned: false
+--- -->
+
 <div align="center">
 
 # DocDrift
@@ -19,7 +27,7 @@ config change causes a measurable quality regression** ("documentation drift").
 
 <div align="center">
 
-![DocDrift demo](docs/images/demo-preview.svg)
+![DocDrift demo](docs/images/UI.png)
 
 </div>
 
