@@ -1,16 +1,19 @@
 from src.core import llm
-import os
 
-def test_provider_defaults_to_ollama(monkeypatch):
-    if "LLM_PROVIDER" in os.environ:
-        print("Removing LLM_PROVIDER from environment for test")
-        monkeypatch.delenv("LLM_PROVIDER", raising=False)
-    assert llm.provider() == "openai"  # config default
+
+def test_provider_falls_back_to_config(monkeypatch):
+    # No env override → provider() returns whatever config says (patched here so
+    # the test doesn't depend on the committed config.yaml value).
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.setattr(llm, "cfg", lambda *a, **k: "ollama")
+    assert llm.provider() == "ollama"
+    monkeypatch.setattr(llm, "cfg", lambda *a, **k: "openai")
+    assert llm.provider() == "openai"
 
 
 def test_provider_env_override(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "OpenAI")
-    assert llm.provider() == "openai"  # case-insensitive
+    assert llm.provider() == "openai"  # env wins, case-insensitive
 
 
 def test_chat_routes_to_openai(monkeypatch):
