@@ -2,7 +2,8 @@ from src.core import llm
 
 
 def test_provider_defaults_to_ollama(monkeypatch):
-    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    if "LLM_PROVIDER" in os.environ:
+        monkeypatch.delenv("LLM_PROVIDER", raising=False)
     assert llm.provider() == "ollama"  # config default
 
 
