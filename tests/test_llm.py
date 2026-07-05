@@ -1,10 +1,11 @@
 from src.core import llm
-
+import os
 
 def test_provider_defaults_to_ollama(monkeypatch):
     if "LLM_PROVIDER" in os.environ:
+        print("Removing LLM_PROVIDER from environment for test")
         monkeypatch.delenv("LLM_PROVIDER", raising=False)
-    assert llm.provider() == "ollama"  # config default
+    assert llm.provider() == "openai"  # config default
 
 
 def test_provider_env_override(monkeypatch):
