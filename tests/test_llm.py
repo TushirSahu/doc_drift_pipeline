@@ -2,8 +2,6 @@ from src.core import llm
 
 
 def test_provider_falls_back_to_config(monkeypatch):
-    # No env override → provider() returns whatever config says (patched here so
-    # the test doesn't depend on the committed config.yaml value).
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.setattr(llm, "cfg", lambda *a, **k: "ollama")
     assert llm.provider() == "ollama"
