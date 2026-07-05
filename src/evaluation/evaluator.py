@@ -9,8 +9,6 @@ import logging
 from typing import Dict
 
 from datasets import Dataset
-from langchain_ollama import ChatOllama, OllamaEmbeddings
-from ollama import chat
 from ragas import RunConfig, evaluate
 from ragas.metrics import (
     answer_correctness,
@@ -20,6 +18,7 @@ from ragas.metrics import (
     faithfulness,
 )
 
+from src.core import llm
 from src.core.settings import cfg
 from src.evaluation.export import export_csv, export_json
 from src.ingestion.vectorstore import get_vectorstore
@@ -38,11 +37,11 @@ METRIC_MAP = {
 
 class RAGEvaluator:
     def __init__(self, model_name: str | None = None, embed_model: str | None = None):
-        self.model_name = model_name or cfg("models", "llm", default="llama3.2:3b")
-        self.embed_model = embed_model or cfg("models", "embed", default="nomic-embed-text")
+        self.model_name = model_name
         self.db_manager = get_vectorstore()
-        self.eval_llm = ChatOllama(model=self.model_name, temperature=0.0)
-        self.eval_embeddings = OllamaEmbeddings(model=self.embed_model)
+        # Provider-agnostic LangChain LLM + embeddings for Ragas.
+        self.eval_llm = llm.eval_llm(temperature=0.0)
+        self.eval_embeddings = llm.eval_embeddings()
 
     def _active_metrics(self) -> list:
         names = cfg("evaluation", "metrics", default=list(METRIC_MAP.keys()))
@@ -56,11 +55,7 @@ Context: {context_str}
 
 Question: {question}"""
 
-        response = chat(
-            model=self.model_name,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return response.message.content
+        return llm.chat([{"role": "user", "content": prompt}], model=self.model_name)
 
     def run_evaluation(
         self,
