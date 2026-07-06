@@ -57,6 +57,11 @@ jobs:
         env:
           QDRANT_URL: ${{ secrets.QDRANT_URL }}
           QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+          # CI runs fully on the local Ollama model — never a paid provider.
+          LLM_PROVIDER: ollama
+          LLM_MODEL: llama3.2:3b
+          EMBED_PROVIDER: sentence_transformers
+          EMBED_MODEL: BAAI/bge-small-en-v1.5
         run: |
           set +e
           python pipeline.py | tee eval_output.txt
