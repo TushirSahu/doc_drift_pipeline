@@ -1,7 +1,16 @@
 name: Continuous RAG Evaluation
 
 on:
-  workflow_dispatch:        # adds a manual "Run workflow" button in the Actions tab
+  workflow_dispatch:        # manual "Run workflow" button — pick the provider
+    inputs:
+      provider:
+        description: "Chat provider for eval"
+        type: choice
+        options: [ollama, openai]
+        default: ollama
+      model:
+        description: "Model id (e.g. llama3.2:3b, gpt-4o-mini)"
+        default: llama3.2:3b
   push:
     paths:
       - 'data/**/*.md'
@@ -57,9 +66,11 @@ jobs:
         env:
           QDRANT_URL: ${{ secrets.QDRANT_URL }}
           QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
-          # CI runs fully on the local Ollama model — never a paid provider.
-          LLM_PROVIDER: ollama
-          LLM_MODEL: llama3.2:3b
+          # Default (push): local Ollama, no paid key. Manual run can pick openai.
+          LLM_PROVIDER: ${{ github.event.inputs.provider || 'ollama' }}
+          LLM_MODEL: ${{ github.event.inputs.model || 'llama3.2:3b' }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
           EMBED_PROVIDER: sentence_transformers
           EMBED_MODEL: BAAI/bge-small-en-v1.5
         run: |

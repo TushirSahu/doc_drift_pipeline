@@ -28,6 +28,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="Compare naive RAG vs agentic RAG on same questions")
     parser.add_argument("--include-regressions", action="store_true",
                         help="Fold human-feedback regression cases into the QA set")
+    parser.add_argument("--compare-providers", metavar="SPECS",
+                        help='Eval across LLMs, e.g. "ollama=llama3.2:3b,openai=gpt-4o-mini"')
     args = parser.parse_args(argv)
 
     logger.info("Starting DocDrift pipeline...")
@@ -66,6 +68,34 @@ def main(argv: list[str] | None = None) -> int:
 
     questions = [p["question"] for p in qa_pairs]
     answers = [p["answer"] for p in qa_pairs]
+
+    if args.compare_providers:
+        import os
+        from src.evaluation.export import export_json
+
+        comparison: dict = {}
+        for spec in [s.strip() for s in args.compare_providers.split(",") if s.strip()]:
+            prov, _, model = spec.partition("=")
+            os.environ["LLM_PROVIDER"] = prov.strip()
+            os.environ["LLM_MODEL"] = model.strip() if model.strip() else ""
+            logger.info("Evaluating %s ...", spec)
+            try:
+                df = RAGEvaluator().run_evaluation(
+                    questions, answers, answers, export=False
+                ).to_pandas()
+                comparison[spec] = {m: float(df[m].mean()) for m in METRICS if m in df.columns}
+            except Exception as e:  # noqa: BLE001
+                logger.error("Provider %s failed: %s", spec, e)
+                comparison[spec] = {"error": str(e)}
+        export_json({"comparison": comparison}, "provider_comparison.json")
+        print("\n" + "=" * 50 + "\nPROVIDER COMPARISON\n" + "=" * 50)
+        for spec, scores in comparison.items():
+            print(f"\n--- {spec} ---")
+            for k, v in scores.items():
+                print(f"  {k:<22}: {v * 100:.2f}%" if isinstance(v, float) else f"  {k}: {v}")
+        print("\nFull results → metrics/provider_comparison.json")
+        return 0
+
     evaluator = RAGEvaluator()
 
     if args.compare_agentic:
