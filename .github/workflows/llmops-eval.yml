@@ -54,4 +54,23 @@ jobs:
         env:
           QDRANT_URL: ${{ secrets.QDRANT_URL }}
           QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
-        run: python pipeline.py
+        run: |
+          set +e
+          python pipeline.py | tee eval_output.txt
+          code=${PIPESTATUS[0]}
+          {
+            echo '## 📊 RAG Evaluation'
+            echo '```'
+            grep -A20 'EVALUATION RESULTS' eval_output.txt || tail -n 25 eval_output.txt
+            echo '```'
+            if [ "$code" -eq 0 ]; then echo '✅ **Drift gate passed**'; else echo '❌ **Drift gate failed** (metric regressed vs baseline)'; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $code
+
+      - name: Upload eval metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-metrics
+          path: metrics/
+          if-no-files-found: ignore
