@@ -1,7 +1,6 @@
 # Secrets
 .env
 docs/*
-
 # Runtime metrics & traces — but keep the committed drift baseline
 metrics/*
 !metrics/baseline.json
