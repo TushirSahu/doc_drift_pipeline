@@ -11,10 +11,33 @@ SDKs are imported lazily so this module stays importable without them.
 """
 from __future__ import annotations
 
+import json
 import os
-from typing import Dict, List
+from dataclasses import dataclass
+from typing import Dict, List, Optional
 
-from src.core.settings import cfg
+from src.core.settings import ROOT_DIR, cfg
+
+
+@dataclass(frozen=True)
+class ModelSpec:
+    """A fully-resolved chat model: everything needed to talk to it in one place.
+
+    The serving path historically read a *single* global provider/model. To
+    compare several LLMs (and route to the winner) each candidate must carry its
+    own provider + endpoint + credentials, otherwise two "openai" models would
+    fight over the shared OPENAI_BASE_URL / OPENAI_API_KEY env. A ModelSpec makes
+    a model self-describing so ``chat(spec=...)`` needs no globals.
+    """
+
+    name: str
+    provider: str
+    model: str
+    base_url: Optional[str] = None
+    api_key_env: str = "OPENAI_API_KEY"
+
+    def api_key(self) -> Optional[str]:
+        return os.getenv(self.api_key_env)
 
 
 def provider() -> str:
@@ -40,13 +63,81 @@ def _sentence_transformer(model: str):
     return st
 
 
-def _openai_client():
+def _openai_client(spec: ModelSpec | None = None):
     from openai import OpenAI  # lazy
 
-    return OpenAI(
-        base_url=os.getenv("OPENAI_BASE_URL") or cfg("models", "base_url", default=None),
-        api_key=os.getenv("OPENAI_API_KEY"),
+    if spec is not None:
+        base_url = spec.base_url or os.getenv("OPENAI_BASE_URL") or cfg("models", "base_url", default=None)
+        api_key = spec.api_key()
+    else:
+        base_url = os.getenv("OPENAI_BASE_URL") or cfg("models", "base_url", default=None)
+        api_key = os.getenv("OPENAI_API_KEY")
+    return OpenAI(base_url=base_url, api_key=api_key)
+
+
+# --- Named-model registry (multi-LLM benchmark + champion routing) -----------
+def registry() -> List[ModelSpec]:
+    """Candidate chat models from ``models.registry`` in config, in file order."""
+    entries = cfg("models", "registry", default=[]) or []
+    specs: List[ModelSpec] = []
+    for e in entries:
+        specs.append(
+            ModelSpec(
+                name=e["name"],
+                provider=str(e.get("provider", "openai")).lower(),
+                model=e["model"],
+                base_url=e.get("base_url"),
+                api_key_env=e.get("api_key_env") or "OPENAI_API_KEY",
+            )
+        )
+    return specs
+
+
+def resolve(name: str) -> ModelSpec:
+    """Look up a registry model by name (raises if it isn't defined)."""
+    for spec in registry():
+        if spec.name == name:
+            return spec
+    raise KeyError(f"model '{name}' not in models.registry")
+
+
+def _legacy_spec() -> ModelSpec:
+    """The single configured model, as a spec (back-compat default)."""
+    return ModelSpec(
+        name="configured",
+        provider=provider(),
+        model=chat_model(),
+        base_url=None,
+        api_key_env="OPENAI_API_KEY",
     )
+
+
+def _champion_path():
+    return ROOT_DIR / cfg("paths", "metrics_dir", default="metrics") / "champion.json"
+
+
+def champion_spec() -> ModelSpec | None:
+    """The benchmark-winning model, if a champion has been recorded."""
+    path = _champion_path()
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        s = data["spec"]
+        return ModelSpec(
+            name=s["name"],
+            provider=str(s.get("provider", "openai")).lower(),
+            model=s["model"],
+            base_url=s.get("base_url"),
+            api_key_env=s.get("api_key_env") or "OPENAI_API_KEY",
+        )
+    except (KeyError, ValueError, OSError):
+        return None
+
+
+def default_chat_spec() -> ModelSpec:
+    """Model the serving path should use: the champion if one exists, else config."""
+    return champion_spec() or _legacy_spec()
 
 
 def chat_model() -> str:
@@ -59,8 +150,30 @@ def embed_model() -> str:
     return os.getenv("EMBED_MODEL") or cfg("models", "embed", default="nomic-embed-text")
 
 
-def chat(messages: List[Dict[str, str]], model: str | None = None, temperature: float = 0.0) -> str:
-    """Return the assistant's text for a chat completion."""
+def chat(
+    messages: List[Dict[str, str]],
+    model: str | None = None,
+    temperature: float = 0.0,
+    spec: ModelSpec | None = None,
+) -> str:
+    """Return the assistant's text for a chat completion.
+
+    ``spec`` selects a self-contained model (provider + endpoint + key); when it
+    is given ``model`` is ignored. Without a spec the call keeps the original
+    behavior (global provider + ``model``/config), so existing callers are
+    unaffected.
+    """
+    if spec is not None:
+        if spec.provider == "openai":
+            resp = _openai_client(spec).chat.completions.create(
+                model=spec.model, messages=messages, temperature=temperature,
+            )
+            return resp.choices[0].message.content or ""
+        from ollama import chat as ollama_chat  # lazy
+
+        resp = ollama_chat(model=spec.model, messages=messages, options={"temperature": temperature})
+        return resp.message.content
+
     model = model or chat_model()
     if provider() == "openai":
         resp = _openai_client().chat.completions.create(

@@ -6,6 +6,33 @@ models:
   embed_dim: 384           # 384 bge-small/MiniLM; 768 nomic/bge-base; 1536 OpenAI 3-small
   # base_url for openai-compatible hosts comes from OPENAI_BASE_URL env
 
+  # --- Multi-LLM benchmark registry ------------------------------------------
+  # Candidate chat models compared head-to-head by `pipeline.py --compare-models`.
+  # Each entry is self-contained (its own provider + credentials), so an HF-router
+  # model and a local Ollama model can be scored in ONE run without clashing over
+  # shared env vars. The winner (best `primary_metric`) becomes the serving model.
+  #   provider     : "openai" (any OpenAI-compatible host) or "ollama" (local)
+  #   model        : model id for that provider
+  #   base_url     : (openai only) endpoint; omit to use OPENAI_BASE_URL env
+  #   api_key_env  : (openai only) env var holding the key; default OPENAI_API_KEY
+  # Add a model = add a list entry. Nothing else to change.
+  registry:
+    - name: llama-3.1-8b-hf
+      provider: openai
+      model: "meta-llama/Llama-3.1-8B-Instruct:cheapest"
+      base_url: "https://router.huggingface.co/v1"
+      api_key_env: HF_TOKEN
+    - name: qwen2.5-7b-hf
+      provider: openai
+      model: "Qwen/Qwen2.5-7B-Instruct:cheapest"
+      base_url: "https://router.huggingface.co/v1"
+      api_key_env: HF_TOKEN
+    - name: llama3.2-3b-local
+      provider: ollama
+      model: "llama3.2:3b"
+  # Metric the champion is chosen by (must be one of evaluation.metrics below).
+  primary_metric: "answer_correctness"
+
 chunking:
   chunk_size: 500
   overlap: 50

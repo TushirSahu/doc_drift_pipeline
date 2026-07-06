@@ -3,6 +3,7 @@ import logging
 import re
 from typing import Any, Dict, List, TypedDict
 
+from src.core import llm
 from src.core.llm import chat as llm_chat
 from src.core.prompts import load_prompt
 from src.core.settings import cfg
@@ -56,8 +57,14 @@ class AgentResult(TypedDict, total=False):
 
 
 class AgenticController:
-    def __init__(self, model_name: str | None = None):
-        self.model_name = model_name or cfg("models", "llm", default="llama3.2:3b")
+    def __init__(self, model_name: str | None = None, spec: "llm.ModelSpec | None" = None):
+        # Serving model resolution: an explicit spec/model wins; otherwise use the
+        # benchmark champion if one has been recorded, else the configured default.
+        # This is how "answer based on the eval scores" reaches the serving path.
+        if spec is None and model_name is None:
+            spec = llm.default_chat_spec()
+        self.spec = spec
+        self.model_name = model_name or (spec.model if spec else cfg("models", "llm", default="llama3.2:3b"))
         self.max_steps = cfg("agentic", "max_steps", default=5)
         self.tools = get_enabled_tools()
 
@@ -114,7 +121,7 @@ class AgenticController:
 
         for step in range(self.max_steps):
             logger.info("Agent step %d/%d", step + 1, self.max_steps)
-            content = llm_chat(messages, model=self.model_name).strip()
+            content = llm_chat(messages, model=self.model_name, spec=self.spec).strip()
             tool_name, tool_args = self._parse_tool_call(content)
 
             if tool_name and tool_name in self.tools:

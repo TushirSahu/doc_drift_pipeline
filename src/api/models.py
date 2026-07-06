@@ -43,6 +43,16 @@ class MetricsResponse(BaseModel):
     retrieval_cache: Dict[str, Any]
 
 
+class ModelsResponse(BaseModel):
+    """Latest multi-LLM benchmark: who's serving + every model's scores."""
+
+    champion: Optional[str] = None            # model name currently serving answers
+    primary_metric: str                       # metric the champion was chosen by
+    updated_at: Optional[str] = None          # when the benchmark last ran
+    models: Dict[str, Dict[str, Any]] = {}    # name -> {metric: score} | {"error": ...}
+    specs: Dict[str, Dict[str, str]] = {}     # name -> {provider, model} from config
+
+
 class FeedbackRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     answer: str = Field(min_length=1)

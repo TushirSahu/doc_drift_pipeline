@@ -31,7 +31,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from src.core.settings import cfg
+from src.core.settings import ROOT_DIR, cfg
 
 from src.agentic.controller import AgenticController
 from src.api.models import (
@@ -40,6 +40,7 @@ from src.api.models import (
     HealthResponse,
     IngestResponse,
     MetricsResponse,
+    ModelsResponse,
     QueryRequest,
     QueryResponse,
     SourcesResponse,
@@ -202,6 +203,35 @@ def sources() -> SourcesResponse:
     # Prettify: "data_auth_service_v2.md" -> "auth_service_v2.md"
     names = sorted({d[5:] if d.startswith("data_") else d for d in doc_ids})
     return SourcesResponse(documents=names)
+
+
+@app.get("/models", response_model=ModelsResponse, dependencies=[Depends(require_api_key)])
+def models() -> ModelsResponse:
+    """The latest multi-LLM benchmark: the serving champion + every model's scores.
+
+    Reads ``metrics/model_scores.json`` (written by ``pipeline.py --compare-models``).
+    These numbers change only when the benchmark re-runs — not per request — so the
+    page can poll this cheaply. ``specs`` is joined from config so the UI can show
+    provider + model id next to each name.
+    """
+    from src.core import llm
+
+    primary_default = cfg("models", "primary_metric", default="answer_correctness")
+    specs = {s.name: {"provider": s.provider, "model": s.model} for s in llm.registry()}
+    path = ROOT_DIR / cfg("paths", "metrics_dir", default="metrics") / "model_scores.json"
+    if not path.exists():
+        return ModelsResponse(champion=None, primary_metric=primary_default, specs=specs)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        return ModelsResponse(champion=None, primary_metric=primary_default, specs=specs)
+    return ModelsResponse(
+        champion=data.get("champion"),
+        primary_metric=data.get("primary_metric", primary_default),
+        updated_at=data.get("timestamp"),
+        models=data.get("models", {}),
+        specs=specs,
+    )
 
 
 @app.get("/metrics", response_model=MetricsResponse, dependencies=[Depends(require_api_key)])

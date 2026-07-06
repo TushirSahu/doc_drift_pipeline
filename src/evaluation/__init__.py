@@ -6,11 +6,14 @@ from src.evaluation.feedback import (
     regression_qa_pairs,
 )
 from src.evaluation.generator import SyntheticDataGenerator
+from src.evaluation.model_bench import benchmark_models, select_champion
 
 __all__ = [
     "METRICS",
     "RAGEvaluator",
     "SyntheticDataGenerator",
+    "benchmark_models",
+    "select_champion",
     "enforce_drift_or_exit",
     "record_feedback",
     "load_regression_cases",

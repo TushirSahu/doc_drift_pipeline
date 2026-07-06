@@ -11,11 +11,27 @@ pipeline do this). The rest of the code can keep using ``cfg()`` as before.
 """
 from __future__ import annotations
 
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, ValidationError
 
 from src.core.settings import get_config
+
+
+class ModelEntry(BaseModel):
+    """One candidate chat model in the multi-LLM benchmark registry.
+
+    Self-contained on purpose: carrying its own provider + credentials is what
+    lets an HF-router model and a local Ollama model be compared in a single run
+    without fighting over the shared OPENAI_BASE_URL / OPENAI_API_KEY env vars.
+    """
+
+    model_config = {"extra": "forbid"}
+    name: str
+    provider: Literal["ollama", "openai"] = "openai"
+    model: str
+    base_url: Optional[str] = None      # openai-compatible host; None → OPENAI_BASE_URL
+    api_key_env: Optional[str] = None   # env var holding the key; None → OPENAI_API_KEY
 
 
 class ModelsCfg(BaseModel):
@@ -25,6 +41,8 @@ class ModelsCfg(BaseModel):
     provider: Literal["ollama", "openai"] = "ollama"
     embed_provider: Literal["ollama", "openai", "sentence_transformers"] = "ollama"
     embed_dim: int = Field(default=768, gt=0)
+    registry: List[ModelEntry] = Field(default_factory=list)
+    primary_metric: str = "answer_correctness"
 
 
 class ChunkingCfg(BaseModel):

@@ -30,9 +30,24 @@ def main(argv: list[str] | None = None) -> int:
                         help="Fold human-feedback regression cases into the QA set")
     parser.add_argument("--compare-providers", metavar="SPECS",
                         help='Eval across LLMs, e.g. "ollama=llama3.2:3b,openai=gpt-4o-mini"')
+    parser.add_argument("--compare-models", action="store_true",
+                        help="Benchmark every model in config models.registry, pick a champion")
+    parser.add_argument("--dashboard", action="store_true",
+                        help="(Re)build metrics/dashboard.html from the last model benchmark")
     args = parser.parse_args(argv)
 
     logger.info("Starting DocDrift pipeline...")
+
+    # Rebuilding the dashboard from an existing benchmark needs no ingest/eval.
+    if args.dashboard and not args.compare_models:
+        from src.evaluation.dashboard import build_dashboard
+
+        path = build_dashboard()
+        if path is None:
+            logger.error("No metrics/model_scores.json yet — run --compare-models first.")
+            return 1
+        print(f"Dashboard → {path}")
+        return 0
 
     if not args.skip_ingest:
         total = ingest_all()
@@ -94,6 +109,37 @@ def main(argv: list[str] | None = None) -> int:
             for k, v in scores.items():
                 print(f"  {k:<22}: {v * 100:.2f}%" if isinstance(v, float) else f"  {k}: {v}")
         print("\nFull results → metrics/provider_comparison.json")
+        return 0
+
+    if args.compare_models:
+        from src.core import llm
+        from src.evaluation import benchmark_models
+
+        specs = llm.registry()
+        if not specs:
+            logger.error("models.registry is empty — add candidate models to config.yaml.")
+            return 1
+        summary = benchmark_models(specs, questions, answers)
+        print("\n" + "=" * 60)
+        print("MULTI-LLM BENCHMARK  (primary metric: %s)" % summary["primary_metric"])
+        print("=" * 60)
+        for name, scores in summary["models"].items():
+            crown = "  👑" if name == summary["champion"] else ""
+            print(f"\n--- {name}{crown} ---")
+            if "error" in scores:
+                print(f"  ERROR: {scores['error']}")
+                continue
+            for metric, score in scores.items():
+                print(f"  {metric.replace('_', ' ').title():<25}: {score * 100:.2f}%")
+        print(f"\nChampion → {summary['champion']}  (serving path now uses it)")
+        print("Scores → metrics/model_scores.json | Champion → metrics/champion.json")
+
+        if args.dashboard:
+            from src.evaluation.dashboard import build_dashboard
+
+            path = build_dashboard()
+            if path:
+                print(f"Dashboard → {path}")
         return 0
 
     evaluator = RAGEvaluator()

@@ -193,6 +193,37 @@
   .gate .sub{font-size:12px;color:var(--muted);margin-top:2px}
   .gate .sub code{font-family:var(--mono);color:var(--text);font-size:11.5px}
 
+  /* Model leaderboard */
+  .lbsub{color:var(--faint);font-size:12.5px;margin:-4px 0 16px;line-height:1.65}
+  .lbsub b{color:#fff;font-weight:600}
+  .lbsub code{font-family:var(--mono);color:var(--muted);background:var(--inset);padding:1px 6px;border-radius:6px;border:1px solid var(--line-2);font-size:11px}
+  .models-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  @media(max-width:720px){.models-grid{grid-template-columns:1fr}}
+  .model{background:var(--panel-2);border:1px solid var(--line-2);border-radius:12px;padding:15px 16px;
+    transition:border-color .15s,transform .15s var(--ease)}
+  .model:hover{border-color:var(--line-3);transform:translateY(-1px)}
+  .model.champ{border-color:var(--line-3);background:var(--chip)}
+  .model .mtop{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:12px}
+  .model .mname{font-family:var(--display);font-weight:600;font-size:15px;color:var(--text);letter-spacing:-.01em}
+  .model.champ .mname{color:#fff}
+  .mprov{font-family:var(--mono);font-size:10px;color:var(--faint);background:var(--inset);
+    border:1px solid var(--line-2);padding:3px 7px;border-radius:6px;max-width:100%;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .mserve{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;
+    letter-spacing:.6px;text-transform:uppercase;color:#000;background:var(--white);padding:4px 9px;border-radius:999px}
+  .mserve .ic{width:11px;height:11px}
+  .mscore{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:6px}
+  .mscore .nm{color:var(--muted)}
+  .mscore b{font-variant-numeric:tabular-nums;color:var(--text);font-weight:700}
+  .model.champ .mscore b{color:#fff}
+  .mmetrics{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .mm{font-family:var(--mono);font-size:10.5px;color:var(--muted);background:var(--inset);
+    border:1px solid var(--line-2);padding:3px 8px;border-radius:6px}
+  .mm b{color:var(--text);font-weight:500}
+  .model.err{opacity:.7}
+  .model.err .mfail{color:var(--muted);font-size:11.5px;font-family:var(--mono);display:flex;align-items:center;gap:7px}
+  .model.err .mfail .ic{color:var(--faint)}
+
   .foot{margin-top:22px;text-align:center;color:var(--faint);font-size:12.5px;line-height:1.7}
   .foot code{font-family:var(--mono);color:var(--muted);background:var(--inset);padding:2px 6px;border-radius:6px;border:1px solid var(--line-2)}
 
@@ -292,6 +323,13 @@
     </section>
   </div>
 
+  <!-- Model leaderboard -->
+  <section class="card" style="margin-top:18px">
+    <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg> Model leaderboard <span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--faint);text-transform:none;letter-spacing:0">Ragas · higher is better</span></h3>
+    <div class="lbsub" id="lbsub"></div>
+    <div class="models-grid" id="models"></div>
+  </section>
+
   <div class="foot">
     Runs on bundled sample data instantly · auto-connects to the live DocDrift API
     (<code>uvicorn src.api.app:app</code>) when reachable — then answers, traces, metrics, and feedback are real.
@@ -380,6 +418,102 @@ function renderMetrics(){
     </div>`;
   }).join('');
 }
+
+// ── Model leaderboard ────────────────────────────────────────────────────
+// Demo payload mirrors GET /models. Scores are illustrative until the real
+// benchmark runs (pipeline.py --compare-models). Live data replaces this.
+const METRIC_LABELS = {
+  faithfulness:"Faithful", answer_relevancy:"Relevancy", context_precision:"Precision",
+  context_recall:"Recall", answer_correctness:"Correctness",
+};
+const DEMO_MODELS = {
+  champion:"qwen2.5-7b-hf", primary_metric:"answer_correctness", updated_at:"demo",
+  models:{
+    "qwen2.5-7b-hf":   {faithfulness:0.96, answer_relevancy:0.93, context_precision:0.99, context_recall:0.90, answer_correctness:0.81},
+    "llama-3.1-8b-hf": {faithfulness:0.94, answer_relevancy:0.91, context_precision:0.99, context_recall:0.88, answer_correctness:0.72},
+    "llama3.2-3b-local":{faithfulness:0.89, answer_relevancy:0.85, context_precision:0.97, context_recall:0.82, answer_correctness:0.63},
+  },
+  specs:{
+    "qwen2.5-7b-hf":   {provider:"openai", model:"Qwen/Qwen2.5-7B-Instruct:cheapest"},
+    "llama-3.1-8b-hf": {provider:"openai", model:"meta-llama/Llama-3.1-8B-Instruct:cheapest"},
+    "llama3.2-3b-local":{provider:"ollama", model:"llama3.2:3b"},
+  },
+};
+
+function shortTime(iso){ try{ return new Date(iso).toLocaleString(); }catch(e){ return iso; } }
+function provLabel(spec){
+  if(!spec) return '';
+  const who = spec.provider==='ollama' ? 'ollama' : 'hf/openai';
+  const id  = spec.provider==='ollama' ? spec.model : String(spec.model||'').split('/').pop();
+  return `<span class="mprov" title="${esc(spec.model)}">${who} · ${esc(id)}</span>`;
+}
+
+function renderModels(data){
+  const primary = data.primary_metric || 'answer_correctness';
+  const specs = data.specs || {};
+  const entries = Object.entries(data.models || {});
+  // Successful models first, ranked by the primary metric; errored models last.
+  entries.sort((a,b)=>{
+    const av = a[1] && !a[1].error ? (a[1][primary] ?? -1) : -2;
+    const bv = b[1] && !b[1].error ? (b[1][primary] ?? -1) : -2;
+    return bv - av;
+  });
+
+  const isDemo = data.updated_at === 'demo' || !LIVE.on;
+  const when = (data.updated_at && !isDemo) ? ` · updated ${shortTime(data.updated_at)}` : '';
+  const sub = document.getElementById('lbsub');
+  if(data.champion){
+    sub.innerHTML = `Answers are served by <b>${esc(data.champion)}</b> 👑 — the model with the best `
+      + `<code>${esc(primary)}</code> in the last benchmark${when}. `
+      + (isDemo ? `<span style="color:var(--faint)">Demo scores — run <code>pipeline.py --compare-models</code> for live numbers.</span>` : '');
+  } else {
+    sub.innerHTML = `No benchmark yet — run <code>python pipeline.py --compare-models</code> to score these models and pick a champion.`;
+  }
+
+  document.getElementById('models').innerHTML = entries.map(([name, sc])=>{
+    const prov = provLabel(specs[name]);
+    const champ = name === data.champion;
+    if(sc && sc.error){
+      return `<div class="model err"><div class="mtop"><span class="mname">${esc(name)}</span>${prov}</div>
+        <div class="mfail">${ic('alert')} ${esc(sc.error)}</div></div>`;
+    }
+    const pv = sc[primary] ?? 0;
+    const serve = champ ? `<span class="mserve">${ic('shield')} Serving</span>` : '';
+    const others = Object.keys(METRIC_LABELS)
+      .filter(m=>m!==primary && sc[m]!=null)
+      .map(m=>`<span class="mm">${METRIC_LABELS[m]} <b>${Math.round(sc[m]*100)}</b></span>`).join('');
+    return `<div class="model${champ?' champ':''}">
+      <div class="mtop"><span class="mname">${champ?'👑 ':''}${esc(name)}</span>${prov}${serve}</div>
+      <div class="mscore"><span class="nm">${METRIC_LABELS[primary]||primary}</span><b>${(pv*100).toFixed(0)}%</b></div>
+      <div class="bar"><span style="width:${(pv*100).toFixed(1)}%"></span></div>
+      <div class="mmetrics">${others}</div>
+    </div>`;
+  }).join('');
+}
+
+async function loadModels(){
+  try{
+    const r = await fetch(LIVE.base+'/models',{headers:headers()});
+    if(!r.ok) return;
+    const d = await r.json();
+    if(d && d.models && Object.keys(d.models).length) renderModels(d);
+  }catch(e){}
+}
+
+// Auto-refresh the board while connected. The benchmark writes model_scores.json
+// on its own cadence (manual run / daily CI), so a light 30s poll keeps the page
+// current without a reload. One timer only; it skips work when the tab is hidden.
+let _modelsTimer = null;
+function startModelsAutoRefresh(){
+  if(_modelsTimer) return;
+  _modelsTimer = setInterval(()=>{
+    if(LIVE.on && document.visibilityState === 'visible') loadModels();
+  }, 30000);
+}
+document.addEventListener('visibilitychange', ()=>{
+  // Pull once immediately when the tab comes back so it never looks stale.
+  if(LIVE.on && document.visibilityState === 'visible') loadModels();
+});
 
 const DOC_NAME  = { auth:"auth_service_v2.md", payment:"doc_payment_v2.md" };
 const DOC_LABEL = { auth:"Auth Service", payment:"Payment API" };
@@ -485,7 +619,7 @@ async function connect(){
   LIVE.base = resolveBase();
   LIVE.key  = resolveKey();
   setStatus(null);
-  try{ const r = await fetch(LIVE.base+'/health'); setStatus(r.ok); if(r.ok){ loadMetrics(); loadSources(); } }
+  try{ const r = await fetch(LIVE.base+'/health'); setStatus(r.ok); if(r.ok){ loadMetrics(); loadSources(); loadModels(); startModelsAutoRefresh(); } }
   catch(e){ setStatus(false); }
 }
 
@@ -621,7 +755,7 @@ async function loadMetrics(){
 
 document.getElementById('qinput').addEventListener('keydown',e=>{if(e.key==='Enter')ask();});
 
-defaultKB(); renderExamples(); renderMetrics(); renderAnswer(SAMPLES[0]);
+defaultKB(); renderExamples(); renderMetrics(); renderAnswer(SAMPLES[0]); renderModels(DEMO_MODELS);
 connect();   // auto-connect to CONFIG.apiBase on load; falls back to demo data if unreachable
 </script>
 </body>

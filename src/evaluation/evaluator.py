@@ -36,10 +36,20 @@ METRIC_MAP = {
 
 
 class RAGEvaluator:
-    def __init__(self, model_name: str | None = None, embed_model: str | None = None):
+    def __init__(
+        self,
+        model_name: str | None = None,
+        embed_model: str | None = None,
+        gen_spec: "llm.ModelSpec | None" = None,
+    ):
         self.model_name = model_name
+        # gen_spec picks the *answer-generating* model for a multi-LLM benchmark.
+        # The Ragas judge (eval_llm/eval_embeddings) is deliberately NOT changed
+        # with it: holding the judge fixed while only the generator varies is what
+        # makes per-model scores comparable — otherwise two variables move at once.
+        self.gen_spec = gen_spec
         self.db_manager = get_vectorstore()
-        # Provider-agnostic LangChain LLM + embeddings for Ragas.
+        # Provider-agnostic LangChain LLM + embeddings for Ragas (the fixed judge).
         self.eval_llm = llm.eval_llm(temperature=0.0)
         self.eval_embeddings = llm.eval_embeddings()
 
@@ -55,7 +65,11 @@ Context: {context_str}
 
 Question: {question}"""
 
-        return llm.chat([{"role": "user", "content": prompt}], model=self.model_name)
+        return llm.chat(
+            [{"role": "user", "content": prompt}],
+            model=self.model_name,
+            spec=self.gen_spec,
+        )
 
     def run_evaluation(
         self,
