@@ -1,20 +1,28 @@
 {
-  "timestamp": "2026-07-06T07:35:10.176880+00:00",
+  "timestamp": "2026-07-06T13:15:12.704861+00:00",
   "primary_metric": "answer_correctness",
   "champion": "llama-3.1-8b-hf",
   "models": {
     "llama-3.1-8b-hf": {
       "faithfulness": 1.0,
-      "answer_relevancy": 0.6998556684636188,
-      "context_precision": 0.9583333332645834,
-      "context_recall": 1.0,
-      "answer_correctness": 0.7689134912390223
+      "answer_relevancy": 0.5190070044267775,
+      "context_precision": 0.8333333332916666,
+      "context_recall": "NaN",
+      "answer_correctness": "NaN"
     },
     "qwen2.5-7b-hf": {
-      "error": "Error code: 402 - {'error': 'You have depleted your monthly included credits. Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get 20x more included usage.'}"
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.9999999999998576,
+      "context_precision": "NaN",
+      "context_recall": "NaN",
+      "answer_correctness": "NaN"
     },
     "llama3.2-3b-local": {
-      "error": "Failed to connect to Ollama. Please check that Ollama is downloaded, running and accessible. https://ollama.com/download"
+      "faithfulness": 0.8933333333333333,
+      "answer_relevancy": 0.9208472148929026,
+      "context_precision": 0.9666666665916667,
+      "context_recall": 1.0,
+      "answer_correctness": 0.6819537433602296
     }
   }
 }
