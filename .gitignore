@@ -1,9 +1,12 @@
 # Secrets
 .env
 docs/*
-# Runtime metrics & traces — but keep the committed drift baseline
+# Runtime metrics & traces — but keep the committed drift baseline and the
+# benchmark outputs the deployed API/UI serve (written by CI --compare-models).
 metrics/*
 !metrics/baseline.json
+!metrics/model_scores.json
+!metrics/champion.json
 !docs/images/architecture.svg
 !docs/images/demo-preview.svg
 

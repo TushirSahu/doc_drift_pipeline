@@ -461,13 +461,14 @@ function renderModels(data){
 
   const isDemo = data.updated_at === 'demo' || !LIVE.on;
   const when = (data.updated_at && !isDemo) ? ` · updated ${shortTime(data.updated_at)}` : '';
+  const primLabel = (METRIC_LABELS[primary] || primary).toLowerCase();
   const sub = document.getElementById('lbsub');
   if(data.champion){
     sub.innerHTML = `Answers are served by <b>${esc(data.champion)}</b> 👑 — the model with the best `
-      + `<code>${esc(primary)}</code> in the last benchmark${when}. `
-      + (isDemo ? `<span style="color:var(--faint)">Demo scores — run <code>pipeline.py --compare-models</code> for live numbers.</span>` : '');
+      + `${esc(primLabel)} score${when}. `
+      + (isDemo ? `<span style="color:var(--faint)">Sample scores — live numbers appear once the benchmark has run.</span>` : '');
   } else {
-    sub.innerHTML = `No benchmark yet — run <code>python pipeline.py --compare-models</code> to score these models and pick a champion.`;
+    sub.innerHTML = `Scores will appear here automatically after the next benchmark run.`;
   }
 
   document.getElementById('models').innerHTML = entries.map(([name, sc])=>{

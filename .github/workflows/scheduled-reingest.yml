@@ -11,6 +11,8 @@ on:
 jobs:
   auto-reingest:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # allow committing refreshed benchmark scores back to the repo
     steps:
       - uses: actions/checkout@v4
 
@@ -32,3 +34,30 @@ jobs:
           QDRANT_URL: ${{ secrets.QDRANT_URL }}
           QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
         run: python -m src.automation.cli --once --force
+
+      # Re-run the multi-LLM benchmark so the leaderboard on the site stays fresh.
+      # Runs even if the drift gate above failed, so scores still update. Docs are
+      # already ingested by the step above, hence --skip-ingest.
+      - name: Benchmark models & pick champion
+        if: ${{ !cancelled() }}
+        env:
+          QDRANT_URL: ${{ secrets.QDRANT_URL }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}            # for the HF-router registry models
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} # for any OpenAI registry models
+        run: python pipeline.py --compare-models --skip-ingest
+
+      # Commit the refreshed scores + champion so the deployed API (GET /models)
+      # and the site's leaderboard serve live numbers on the next deploy.
+      - name: Commit benchmark results
+        if: ${{ !cancelled() }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f metrics/model_scores.json metrics/champion.json
+          if git diff --cached --quiet; then
+            echo "No score changes to commit."
+          else
+            git commit -m "chore: refresh model benchmark scores [skip ci]"
+            git push
+          fi
