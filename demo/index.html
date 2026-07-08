@@ -197,6 +197,12 @@
   .lbsub{color:var(--faint);font-size:12.5px;margin:-4px 0 16px;line-height:1.65}
   .lbsub b{color:#fff;font-weight:600}
   .lbsub code{font-family:var(--mono);color:var(--muted);background:var(--inset);padding:1px 6px;border-radius:6px;border:1px solid var(--line-2);font-size:11px}
+  .rerun-row{display:flex;align-items:center;gap:10px;margin:0 0 14px}
+  .rerun{background:var(--inset);color:#fff;border:1px solid var(--line-3);border-radius:8px;padding:6px 12px;font:inherit;font-size:12px;cursor:pointer;transition:background .15s}
+  .rerun:hover:not(:disabled){background:var(--chip)}
+  .rerun:disabled{opacity:.5;cursor:not-allowed}
+  .rerun-msg{color:var(--muted);font-size:11.5px}
+  .rerun-msg.err{color:#e5a0a0}
   .models-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
   @media(max-width:720px){.models-grid{grid-template-columns:1fr}}
   .model{background:var(--panel-2);border:1px solid var(--line-2);border-radius:12px;padding:15px 16px;
@@ -327,6 +333,10 @@
   <section class="card" style="margin-top:18px">
     <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg> Model leaderboard <span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--faint);text-transform:none;letter-spacing:0">Ragas · higher is better</span></h3>
     <div class="lbsub" id="lbsub"></div>
+    <div class="rerun-row">
+      <button id="rerunBtn" class="rerun" onclick="rerunBenchmark()" title="Re-run the multi-LLM benchmark (live API only)">↻ Re-run benchmark</button>
+      <span id="rerunMsg" class="rerun-msg"></span>
+    </div>
     <div class="models-grid" id="models"></div>
   </section>
 
@@ -406,17 +416,45 @@ const METRICS = [
   {name:"Context recall", val:0.95, base:0.94},
 ];
 
-function renderMetrics(){
-  document.getElementById('metrics').innerHTML = METRICS.map(m=>{
-    const d = Math.round((m.val - m.base)*100);
+// Prettify a raw metric key when no explicit label exists:
+// "answer_correctness" -> "Answer correctness". Keeps the panel dynamic — a new
+// Ragas metric shows up with a readable name without editing this file.
+function prettify(k){ const s=String(k).replace(/_/g,' '); return s.charAt(0).toUpperCase()+s.slice(1); }
+
+// `items` are {name, val, base?}. Defaults to the static demo array (offline);
+// loadEval() passes items built from live /eval data.
+function renderMetrics(items){
+  const rows = items || METRICS;
+  document.getElementById('metrics').innerHTML = rows.map(m=>{
+    const hasBase = typeof m.base === 'number';
+    const d = hasBase ? Math.round((m.val - m.base)*100) : 0;
     const delta = d>0 ? `<span class="delta">▲ +${d}</span>` : (d<0 ? `<span class="delta">▼ ${d}</span>` : '');
+    const base = hasBase ? `<span class="base">· base ${(m.base*100).toFixed(0)}%</span>` : '';
+    const mark = hasBase ? `<i class="basemark" style="left:${m.base*100}%"></i>` : '';
     return `
     <div class="metric">
-      <div class="row"><span class="nm">${m.name}</span>
-        <b>${(m.val*100).toFixed(0)}%<span class="base">· base ${(m.base*100).toFixed(0)}%</span>${delta}</b></div>
-      <div class="bar"><span style="width:${m.val*100}%"></span><i class="basemark" style="left:${m.base*100}%"></i></div>
+      <div class="row"><span class="nm">${esc(m.name)}</span>
+        <b>${(m.val*100).toFixed(0)}%${base}${delta}</b></div>
+      <div class="bar"><span style="width:${m.val*100}%"></span>${mark}</div>
     </div>`;
   }).join('');
+}
+
+// Build the quality panel from live /eval scores; falls back to demo array.
+async function loadEval(){
+  try{
+    const r = await fetch(LIVE.base+'/eval',{headers:headers()});
+    if(!r.ok) return;
+    const d = await r.json();
+    const scores = d.scores || {};
+    const base = d.baseline || {};
+    const items = Object.keys(scores).map(k=>({
+      name: METRIC_LABELS[k] || prettify(k),
+      val: scores[k],
+      base: typeof base[k] === 'number' ? base[k] : undefined,
+    }));
+    if(items.length) renderMetrics(items);
+  }catch(e){}
 }
 
 // ── Model leaderboard ────────────────────────────────────────────────────
@@ -461,7 +499,7 @@ function renderModels(data){
 
   const isDemo = data.updated_at === 'demo' || !LIVE.on;
   const when = (data.updated_at && !isDemo) ? ` · updated ${shortTime(data.updated_at)}` : '';
-  const primLabel = (METRIC_LABELS[primary] || primary).toLowerCase();
+  const primLabel = (METRIC_LABELS[primary] || prettify(primary)).toLowerCase();
   const sub = document.getElementById('lbsub');
   if(data.champion){
     sub.innerHTML = `Answers are served by <b>${esc(data.champion)}</b> 👑 — the model with the best `
@@ -480,12 +518,14 @@ function renderModels(data){
     }
     const pv = sc[primary] ?? 0;
     const serve = champ ? `<span class="mserve">${ic('shield')} Serving</span>` : '';
-    const others = Object.keys(METRIC_LABELS)
-      .filter(m=>m!==primary && sc[m]!=null)
-      .map(m=>`<span class="mm">${METRIC_LABELS[m]} <b>${Math.round(sc[m]*100)}</b></span>`).join('');
+    // Iterate the model's own metric keys, not a fixed list — a new Ragas
+    // metric shows automatically. METRIC_LABELS is just an optional short label.
+    const others = Object.keys(sc)
+      .filter(m=>m!==primary && typeof sc[m]==='number')
+      .map(m=>`<span class="mm">${esc(METRIC_LABELS[m]||prettify(m))} <b>${Math.round(sc[m]*100)}</b></span>`).join('');
     return `<div class="model${champ?' champ':''}">
       <div class="mtop"><span class="mname">${champ?'👑 ':''}${esc(name)}</span>${prov}${serve}</div>
-      <div class="mscore"><span class="nm">${METRIC_LABELS[primary]||primary}</span><b>${(pv*100).toFixed(0)}%</b></div>
+      <div class="mscore"><span class="nm">${esc(METRIC_LABELS[primary]||prettify(primary))}</span><b>${(pv*100).toFixed(0)}%</b></div>
       <div class="bar"><span style="width:${(pv*100).toFixed(1)}%"></span></div>
       <div class="mmetrics">${others}</div>
     </div>`;
@@ -515,6 +555,50 @@ document.addEventListener('visibilitychange', ()=>{
   // Pull once immediately when the tab comes back so it never looks stale.
   if(LIVE.on && document.visibilityState === 'visible') loadModels();
 });
+
+// ── Re-run benchmark ─────────────────────────────────────────────────────
+// POST /models/benchmark starts a background --compare-models run; poll the
+// status endpoint until it finishes, then refresh the board. Needs the live API
+// and api.allow_benchmark_trigger enabled (else the endpoint returns 403).
+let _benchPoll = null;
+function setRerunMsg(text, isErr){
+  const el = document.getElementById('rerunMsg');
+  el.textContent = text || '';
+  el.classList.toggle('err', !!isErr);
+}
+function syncRerunButton(){
+  const btn = document.getElementById('rerunBtn');
+  if(!btn) return;
+  const running = !!_benchPoll;
+  btn.disabled = !LIVE.on || running;
+  if(!LIVE.on) setRerunMsg('Connect to the live API to re-run.');
+}
+async function pollBenchmark(){
+  try{
+    const r = await fetch(LIVE.base+'/models/benchmark/status',{headers:headers()});
+    if(!r.ok) return;
+    const s = await r.json();
+    if(s.state === 'running'){ setRerunMsg('Benchmark running…'); return; }
+    // Terminal state — stop polling, refresh the board.
+    clearInterval(_benchPoll); _benchPoll = null;
+    syncRerunButton();
+    if(s.state === 'done'){ setRerunMsg('Done — board updated.'); loadModels(); loadEval(); }
+    else setRerunMsg(s.error || 'Benchmark failed.', true);
+  }catch(e){}
+}
+async function rerunBenchmark(){
+  if(!LIVE.on || _benchPoll) return;
+  setRerunMsg('Starting…');
+  try{
+    const r = await fetch(LIVE.base+'/models/benchmark',{method:'POST',headers:headers()});
+    if(r.status === 403){ setRerunMsg('Disabled on this server — run pipeline.py --compare-models locally.', true); return; }
+    if(r.status === 409){ setRerunMsg('A benchmark is already running.'); }
+    else if(!r.ok){ setRerunMsg('Could not start (HTTP '+r.status+').', true); return; }
+    _benchPoll = setInterval(pollBenchmark, 3000);
+    syncRerunButton();
+    pollBenchmark();
+  }catch(e){ setRerunMsg('Could not reach the API.', true); }
+}
 
 const DOC_NAME  = { auth:"auth_service_v2.md", payment:"doc_payment_v2.md" };
 const DOC_LABEL = { auth:"Auth Service", payment:"Payment API" };
@@ -614,13 +698,14 @@ function setStatus(state){
   el.classList.toggle('live', state === true);
   const label = state === null ? 'Connecting…' : (state ? 'Live API' : 'Demo data');
   el.innerHTML = `<span class="dot"></span> ${label}`;
+  syncRerunButton();
 }
 
 async function connect(){
   LIVE.base = resolveBase();
   LIVE.key  = resolveKey();
   setStatus(null);
-  try{ const r = await fetch(LIVE.base+'/health'); setStatus(r.ok); if(r.ok){ loadMetrics(); loadSources(); loadModels(); startModelsAutoRefresh(); } }
+  try{ const r = await fetch(LIVE.base+'/health'); setStatus(r.ok); if(r.ok){ loadMetrics(); loadSources(); loadModels(); loadEval(); startModelsAutoRefresh(); } }
   catch(e){ setStatus(false); }
 }
 

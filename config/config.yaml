@@ -27,6 +27,11 @@ models:
       model: "Qwen/Qwen2.5-7B-Instruct:cheapest"
       base_url: "https://router.huggingface.co/v1"
       api_key_env: HF_TOKEN
+    - name: qwen2.5-3b-hf
+      provider: openai
+      model: "Qwen/Qwen2.5-3B-Instruct:cheapest"
+      base_url: "https://router.huggingface.co/v1"
+      api_key_env: HF_TOKEN
     - name: llama3.2-3b-local
       provider: ollama
       model: "llama3.2:3b"
@@ -84,6 +89,8 @@ prompts:
 
 api:
   rate_limit_per_min: 60    # per-IP; makes a keyless public demo safe (0 disables)
+  allow_benchmark_trigger: false  # let POST /models/benchmark spawn --compare-models
+                                  # (off by default so a public demo can't be abused)
 
 guardrails:
   min_grounding: 0.3       # answers below this overlap with context are flagged

@@ -20,8 +20,13 @@ Run:  uvicorn src.api.app:app --host 0.0.0.0 --port 8000
 from __future__ import annotations
 
 import logging
+import math
 import os
+import subprocess
+import sys
+import threading
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 import json
 import time
@@ -35,6 +40,8 @@ from src.core.settings import ROOT_DIR, cfg
 
 from src.agentic.controller import AgenticController
 from src.api.models import (
+    BenchmarkStatusResponse,
+    EvalResponse,
     FeedbackRequest,
     FeedbackResponse,
     HealthResponse,
@@ -122,6 +129,49 @@ def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing API key"
         )
+
+
+# ── Background multi-LLM benchmark job ──────────────────────────────────────
+# One benchmark runs at a time per process. State is a module global guarded by
+# a lock; a watcher thread records the outcome when the subprocess exits. The
+# `_spawn` seam lets tests run the job body synchronously (or not at all).
+_BENCH_LOCK = threading.Lock()
+_BENCH: dict = {
+    "state": "idle", "started_at": None, "finished_at": None,
+    "returncode": None, "error": None,
+}
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _reset_benchmark_state() -> None:
+    with _BENCH_LOCK:
+        _BENCH.update(state="idle", started_at=None, finished_at=None,
+                      returncode=None, error=None)
+
+
+def _spawn(fn) -> None:
+    threading.Thread(target=fn, daemon=True).start()
+
+
+def _run_benchmark_job() -> None:
+    """Run `pipeline.py --compare-models` and record the outcome. Fixed argv —
+    no user input reaches the command line, so there is nothing to inject."""
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, "pipeline.py", "--compare-models"], cwd=str(ROOT_DIR)
+        )
+        rc = proc.wait()
+        with _BENCH_LOCK:
+            _BENCH["returncode"] = rc
+            _BENCH["finished_at"] = _now()
+            _BENCH["state"] = "done" if rc == 0 else "error"
+            _BENCH["error"] = None if rc == 0 else f"pipeline exited with code {rc}"
+    except Exception as exc:  # noqa: BLE001 - surface, don't crash the thread
+        with _BENCH_LOCK:
+            _BENCH.update(state="error", finished_at=_now(), error=str(exc))
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -232,6 +282,90 @@ def models() -> ModelsResponse:
         models=data.get("models", {}),
         specs=specs,
     )
+
+
+def _finite_scores(path) -> dict:
+    """Load a `{scores: {...}}` metrics file, keeping only finite float values.
+    NaN/inf (e.g. Ragas failing a metric) are dropped so the JSON stays valid."""
+    if not path.exists():
+        return {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8")).get("scores", {})
+    except (ValueError, OSError):
+        return {}
+    out = {}
+    for name, val in raw.items():
+        try:
+            f = float(val)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(f):
+            out[name] = f
+    return out
+
+
+@app.get("/eval", response_model=EvalResponse, dependencies=[Depends(require_api_key)])
+def eval_scores() -> EvalResponse:
+    """Latest single-model Ragas scores vs the committed drift baseline.
+
+    Reads ``metrics/latest_eval.json`` and ``metrics/baseline.json`` (written by
+    ``pipeline.py``). Lets the dashboard render the quality panel from live data
+    instead of a hardcoded metric list.
+    """
+    metrics_dir = ROOT_DIR / cfg("paths", "metrics_dir", default="metrics")
+    latest_path = metrics_dir / "latest_eval.json"
+    updated_at = None
+    if latest_path.exists():
+        try:
+            updated_at = json.loads(latest_path.read_text(encoding="utf-8")).get("timestamp")
+        except (ValueError, OSError):
+            updated_at = None
+    return EvalResponse(
+        scores=_finite_scores(latest_path),
+        baseline=_finite_scores(metrics_dir / "baseline.json"),
+        updated_at=updated_at,
+    )
+
+
+@app.post(
+    "/models/benchmark",
+    response_model=BenchmarkStatusResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def start_benchmark() -> BenchmarkStatusResponse:
+    """Kick off a fresh multi-LLM benchmark in the background.
+
+    Gated behind ``api.allow_benchmark_trigger`` (default off) so a public,
+    keyless demo can't be made to spawn expensive jobs. One job per process:
+    a second start while one is running returns 409.
+    """
+    if not cfg("api", "allow_benchmark_trigger", default=False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Benchmark trigger disabled. Run `python pipeline.py "
+                   "--compare-models` locally, or set api.allow_benchmark_trigger.",
+        )
+    with _BENCH_LOCK:
+        if _BENCH["state"] == "running":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A benchmark is already running.",
+            )
+        _BENCH.update(state="running", started_at=_now(), finished_at=None,
+                      returncode=None, error=None)
+        snapshot = dict(_BENCH)
+    _spawn(_run_benchmark_job)
+    return BenchmarkStatusResponse(**snapshot)
+
+
+@app.get(
+    "/models/benchmark/status",
+    response_model=BenchmarkStatusResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def benchmark_status() -> BenchmarkStatusResponse:
+    with _BENCH_LOCK:
+        return BenchmarkStatusResponse(**_BENCH)
 
 
 @app.get("/metrics", response_model=MetricsResponse, dependencies=[Depends(require_api_key)])

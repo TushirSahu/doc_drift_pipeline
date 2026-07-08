@@ -101,3 +101,72 @@ def test_feedback_rejects_bad_rating(monkeypatch):
             "question": "q", "answer": "a", "rating": "maybe",
         })
     assert resp.status_code == 422  # Literal["up","down"] validation
+
+
+def test_eval_returns_scores_and_baseline(monkeypatch):
+    monkeypatch.delenv("DOCDRIFT_API_KEY", raising=False)
+    with TestClient(app) as client:
+        resp = client.get("/eval")
+    assert resp.status_code == 200
+    body = resp.json()
+    # Shape is stable even when the metric files are missing/empty.
+    assert isinstance(body["scores"], dict)
+    assert isinstance(body["baseline"], dict)
+    assert "updated_at" in body
+
+
+def _cfg_with_gate(gate: bool):
+    """cfg() stub: control the benchmark gate, leave everything else at default
+    (so the rate limiter stays disabled)."""
+    def fake(section, key, default=None):
+        if (section, key) == ("api", "allow_benchmark_trigger"):
+            return gate
+        return default
+    return fake
+
+
+def test_benchmark_trigger_disabled_by_default(monkeypatch):
+    monkeypatch.delenv("DOCDRIFT_API_KEY", raising=False)
+    # Gate off (the default) → the endpoint refuses to spawn anything.
+    monkeypatch.setattr(app_module, "cfg", _cfg_with_gate(False))
+    with TestClient(app) as client:
+        resp = client.post("/models/benchmark")
+    assert resp.status_code == 403
+
+
+def test_benchmark_start_and_double_start(monkeypatch):
+    monkeypatch.delenv("DOCDRIFT_API_KEY", raising=False)
+    monkeypatch.setattr(app_module, "cfg", _cfg_with_gate(True))
+    # Don't actually launch a job — freeze it in the "running" state.
+    monkeypatch.setattr(app_module, "_spawn", lambda fn: None)
+    app_module._reset_benchmark_state()
+    with TestClient(app) as client:
+        first = client.post("/models/benchmark")
+        second = client.post("/models/benchmark")
+        status = client.get("/models/benchmark/status")
+    assert first.status_code == 200
+    assert first.json()["state"] == "running"
+    assert second.status_code == 409          # a job is already running
+    assert status.json()["state"] == "running"
+    app_module._reset_benchmark_state()
+
+
+def test_benchmark_records_done_on_success(monkeypatch):
+    monkeypatch.delenv("DOCDRIFT_API_KEY", raising=False)
+    monkeypatch.setattr(app_module, "cfg", _cfg_with_gate(True))
+    # Run the job body synchronously so the state transition is deterministic.
+    monkeypatch.setattr(app_module, "_spawn", lambda fn: fn())
+
+    class _FakeProc:
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(app_module.subprocess, "Popen", lambda *a, **k: _FakeProc())
+    app_module._reset_benchmark_state()
+    with TestClient(app) as client:
+        start = client.post("/models/benchmark")
+        status = client.get("/models/benchmark/status")
+    assert start.status_code == 200
+    assert status.json()["state"] == "done"
+    assert status.json()["returncode"] == 0
+    app_module._reset_benchmark_state()
