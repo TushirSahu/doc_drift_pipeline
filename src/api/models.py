@@ -53,6 +53,24 @@ class ModelsResponse(BaseModel):
     specs: Dict[str, Dict[str, str]] = {}     # name -> {provider, model} from config
 
 
+class EvalResponse(BaseModel):
+    """Latest single-model Ragas eval vs the committed drift baseline."""
+
+    scores: Dict[str, float] = {}             # metric -> latest score
+    baseline: Dict[str, float] = {}           # metric -> baseline score
+    updated_at: Optional[str] = None          # when latest_eval was written
+
+
+class BenchmarkStatusResponse(BaseModel):
+    """State of the background multi-LLM benchmark job (--compare-models)."""
+
+    state: Literal["idle", "running", "done", "error"]
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    returncode: Optional[int] = None
+    error: Optional[str] = None
+
+
 class FeedbackRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     answer: str = Field(min_length=1)
