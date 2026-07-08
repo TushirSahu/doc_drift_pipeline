@@ -22,19 +22,26 @@ models:
       model: "meta-llama/Llama-3.1-8B-Instruct:cheapest"
       base_url: "https://router.huggingface.co/v1"
       api_key_env: HF_TOKEN
-    - name: qwen2.5-7b-hf
-      provider: openai
-      model: "Qwen/Qwen2.5-7B-Instruct:cheapest"
-      base_url: "https://router.huggingface.co/v1"
-      api_key_env: HF_TOKEN
+    # - name: qwen2.5-7b-hf
+    #   provider: openai
+    #   model: "Qwen/Qwen2.5-7B-Instruct:cheapest"
+      # base_url: "https://router.huggingface.co/v1"
+      # api_key_env: HF_TOKEN
     - name: qwen2.5-3b-hf
       provider: openai
-      model: "Qwen/Qwen2.5-3B-Instruct:cheapest"
+      model: "Qwen/Qwen2.5-3B-Instruct:fastest"
       base_url: "https://router.huggingface.co/v1"
       api_key_env: HF_TOKEN
-    - name: llama3.2-3b-local
-      provider: ollama
-      model: "llama3.2:3b"
+    # - name: llama3.2-3b-local
+    #   provider: ollama
+    #   model: "llama3.2:3b"
+    #   base_url: "http://localhost:11434"
+    #   api_key_env: OLLAMA_API_KEY
+    - name: meta-llama/Llama-3.2-3B
+      provider: openai
+      model: "meta-llama/Llama-3.2-3B-Instruct"
+      base_url: "https://router.huggingface.co/v1"
+      api_key_env: HF_TOKEN
   # Metric the champion is chosen by (must be one of evaluation.metrics below).
   primary_metric: "answer_correctness"
 
