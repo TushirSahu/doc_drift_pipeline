@@ -89,7 +89,7 @@ prompts:
 
 api:
   rate_limit_per_min: 60    # per-IP; makes a keyless public demo safe (0 disables)
-  allow_benchmark_trigger: false  # let POST /models/benchmark spawn --compare-models
+  allow_benchmark_trigger: true  # let POST /models/benchmark spawn --compare-models
                                   # (off by default so a public demo can't be abused)
 
 guardrails:
