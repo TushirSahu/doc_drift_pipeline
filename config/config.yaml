@@ -108,6 +108,9 @@ cache:
   embedding_ttl: 86400     # embeddings are deterministic — cache for a day
   retrieval_maxsize: 512
   retrieval_ttl: 600       # results invalidated on re-ingest
+  answer_enabled: true     # cache full agent answers; repeat question skips the loop
+  answer_maxsize: 256
+  answer_ttl: 600          # answers invalidated on re-ingest
 
 resilience:
   attempts: 3              # retries for Ollama/Qdrant calls

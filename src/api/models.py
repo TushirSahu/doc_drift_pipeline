@@ -26,6 +26,7 @@ class QueryResponse(BaseModel):
     retrieved_contexts: List[str]
     guardrails: GuardrailInfo
     warning: Optional[str] = None
+    cached: bool = False                      # answer served from the answer cache
 
 
 class IngestResponse(BaseModel):
@@ -41,6 +42,7 @@ class MetricsResponse(BaseModel):
     traces: Dict[str, Any]
     embedding_cache: Dict[str, Any]
     retrieval_cache: Dict[str, Any]
+    answer_cache: Dict[str, Any]
 
 
 class ModelsResponse(BaseModel):

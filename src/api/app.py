@@ -52,7 +52,7 @@ from src.api.models import (
     QueryResponse,
     SourcesResponse,
 )
-from src.core.cache import embedding_cache, retrieval_cache
+from src.core.cache import answer_cache, embedding_cache, retrieval_cache
 from src.core.logging import configure_logging
 from src.core.schema import ConfigError, validate_config
 from src.observability.stats import summarize_traces
@@ -219,6 +219,7 @@ def query(req: QueryRequest) -> QueryResponse:
         retrieved_contexts=result.get("retrieved_contexts", []),
         guardrails=guard,
         warning=warning,
+        cached=result.get("cached", False),
     )
 
 
@@ -237,8 +238,9 @@ def ingest() -> IngestResponse:
     from src.ingestion.service import ingest_all
 
     total = ingest_all()
-    # New docs may change retrieval results — drop the stale cache.
+    # New docs may change retrieval results and answers — drop the stale caches.
     retrieval_cache.clear()
+    answer_cache.clear()
     return IngestResponse(ingested_chunks=total)
 
 
@@ -376,6 +378,7 @@ def metrics() -> MetricsResponse:
         traces=summarize_traces(),
         embedding_cache=embedding_cache.stats(),
         retrieval_cache=retrieval_cache.stats(),
+        answer_cache=answer_cache.stats(),
     )
 
 

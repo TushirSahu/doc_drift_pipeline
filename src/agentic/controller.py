@@ -4,8 +4,9 @@ import re
 from typing import Any, Dict, List, TypedDict
 
 from src.core import llm
+from src.core.cache import answer_cache, make_key
 from src.core.llm import chat as llm_chat
-from src.core.prompts import load_prompt
+from src.core.prompts import load_prompt, prompt_version
 from src.core.settings import cfg
 from src.agentic.tools import get_enabled_tools, tool_descriptions
 from src.agentic.guardrails import (
@@ -36,6 +37,15 @@ def _clean_args(raw: str) -> str:
     return raw
 
 
+_WS_RE = re.compile(r"\s+")
+
+
+def _normalize_q(question: str) -> str:
+    """Canonical form for cache keying: case- and whitespace-insensitive, so
+    'What is auth?' and '  what   IS  auth? ' share one cached answer."""
+    return _WS_RE.sub(" ", (question or "").strip().lower())
+
+
 def _word_chunks(text: str):
     """Yield small chunks (word + space) so a UI can 'type out' the answer."""
     words = text.split(" ")
@@ -59,6 +69,7 @@ class AgentResult(TypedDict, total=False):
     input_guard: Dict[str, Any]
     output_guard: Dict[str, Any]
     blocked: bool
+    cached: bool
 
 
 class AgenticController:
@@ -227,14 +238,47 @@ class AgenticController:
             "input_guard": input_guard,
         }
 
+    def _answer_cache_key(self, question: str) -> str:
+        # Bind the key to the model and prompt version so switching either never
+        # serves an answer produced by the other.
+        return make_key("answer", self.model_name, prompt_version(),
+                        _normalize_q(question))
+
     def run(self, question: str) -> AgentResult:
         # Trace the whole request so latency/steps/grounding land in traces.jsonl.
         with Tracer("agentic_query") as tracer:
+            use_cache = cfg("cache", "answer_enabled", default=True)
+            key = self._answer_cache_key(question) if use_cache else None
+
+            if key is not None:
+                hit = answer_cache.get(key)
+                if hit is not None:
+                    # Whole agent loop skipped — return the stored verdict as-is,
+                    # only flagging that it came from cache.
+                    cached = dict(hit)
+                    cached["cached"] = True
+                    tracer.update(
+                        question=question, steps=cached.get("steps", 0),
+                        tools_used=cached.get("tools_used", []),
+                        retrieved_count=len(cached.get("retrieved_contexts", [])),
+                        grounded=cached["guardrails"]["grounded"],
+                        grounding_score=cached["guardrails"]["grounding_score"],
+                        cached=True,
+                    )
+                    return cached
+
             result: AgentResult = {}
             for kind, payload in self._iter(question):
                 if kind == "final":
                     result = payload
             result = self._finalize(result)
+            result.setdefault("cached", False)
+
+            # Only cache real answers — never a request the input filter refused
+            # (cheap to recompute, and we want the guard to re-run each time).
+            if key is not None and not result.get("blocked"):
+                answer_cache.set(key, result)
+
             tracer.update(
                 question=question,
                 steps=result["steps"],
@@ -242,6 +286,7 @@ class AgenticController:
                 retrieved_count=len(result.get("retrieved_contexts", [])),
                 grounded=result["guardrails"]["grounded"],
                 grounding_score=result["guardrails"]["grounding_score"],
+                cached=False,
             )
             return result
 
