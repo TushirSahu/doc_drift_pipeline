@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional
 
 from src.core import llm
+from src.core.blob_store import write_metrics_json
 from src.core.llm import ModelSpec
 from src.core.settings import cfg
 from src.evaluation.drift import METRICS
@@ -83,8 +84,6 @@ def select_champion(
 
 
 def _write_champion(spec: ModelSpec, primary_metric: str, score: Scores) -> None:
-    path = metrics_dir() / "champion.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "created_at": datetime.now(timezone.utc).isoformat(),
         "name": spec.name,
@@ -92,7 +91,7 @@ def _write_champion(spec: ModelSpec, primary_metric: str, score: Scores) -> None
         "score": score.get(primary_metric),
         "spec": asdict(spec),
     }
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    write_metrics_json("champion.json", payload)
     logger.info("Champion → %s (%s=%s)", spec.name, primary_metric, payload["score"])
 
 

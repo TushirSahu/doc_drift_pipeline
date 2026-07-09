@@ -23,11 +23,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from src.core import pg
 from src.core.settings import ROOT_DIR, cfg
 
 logger = logging.getLogger(__name__)
 
 _WRITE_LOCK = threading.Lock()
+_PG_READY = False
 
 
 def traces_path() -> Path:
@@ -35,8 +37,48 @@ def traces_path() -> Path:
     return ROOT_DIR / rel / "traces.jsonl"
 
 
+def _ensure_pg_table() -> None:
+    global _PG_READY
+    if _PG_READY:
+        return
+    pg.execute(
+        "CREATE TABLE IF NOT EXISTS traces ("
+        "trace_id TEXT, operation TEXT, ts TIMESTAMPTZ, "
+        "latency_ms DOUBLE PRECISION, ok BOOLEAN, data JSONB)"
+    )
+    _PG_READY = True
+
+
+def load_traces_pg() -> list[Dict[str, Any]]:
+    """Every stored trace record (full JSONB payload), oldest first."""
+    _ensure_pg_table()
+    rows = pg.query("SELECT data FROM traces ORDER BY ts")
+    return [r[0] for r in rows]
+
+
 def record_trace(record: Dict[str, Any], path: Optional[Path] = None) -> None:
-    """Append a single trace record as one JSON line."""
+    """Persist one trace: to Postgres when enabled (and no explicit path is
+    given), otherwise appended as one JSON line to ``traces.jsonl``."""
+    if path is None and pg.pg_enabled():
+        try:
+            _ensure_pg_table()
+            pg.execute(
+                "INSERT INTO traces (trace_id, operation, ts, latency_ms, ok, data) "
+                "VALUES (%(trace_id)s, %(operation)s, %(ts)s, %(latency_ms)s, "
+                "%(ok)s, %(data)s::jsonb)",
+                {
+                    "trace_id": record.get("trace_id"),
+                    "operation": record.get("operation"),
+                    "ts": record.get("timestamp"),
+                    "latency_ms": record.get("latency_ms"),
+                    "ok": record.get("ok"),
+                    "data": json.dumps(record, default=str),
+                },
+            )
+            return
+        except Exception as e:  # noqa: BLE001 - fall back to file, never lose the request
+            logger.warning("Postgres trace write failed, using file: %s", e)
+
     target = path or traces_path()
     target.parent.mkdir(parents=True, exist_ok=True)
     line = json.dumps(record, default=str)

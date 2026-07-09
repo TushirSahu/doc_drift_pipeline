@@ -17,4 +17,5 @@ sentence-transformers>=2.2.0   # cross-encoder reranker (pulls torch; heavy)
 openai>=1.0.0                  # hosted model provider (OpenAI-compatible)
 langchain-openai>=0.1.0       # Ragas eval LLM/embeddings for openai-compatible providers
 langchain-community>=0.2.0    # Ragas HuggingFace (sentence-transformers) embeddings
-psycopg[binary]>=3.1          # Postgres feedback store (optional; used when DATABASE_URL set)
+psycopg[binary]>=3.1          # Postgres durable stores (optional; used when DATABASE_URL set)
+psycopg_pool>=3.2             # pooled connections for per-request trace writes

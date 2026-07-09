@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
+from src.core import pg
 from src.core.identity import content_hash
 from src.core.settings import ROOT_DIR
 from src.ingestion.chunking import chunk_text
@@ -19,6 +20,19 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 INGEST_STATE_FILE = ROOT_DIR / "metrics" / "ingest_state.json"
+
+_INGEST_PG_READY = False
+
+
+def _ensure_ingest_table() -> None:
+    global _INGEST_PG_READY
+    if _INGEST_PG_READY:
+        return
+    pg.execute(
+        "CREATE TABLE IF NOT EXISTS ingest_state ("
+        "doc_id TEXT PRIMARY KEY, content_hash TEXT, updated_at TIMESTAMPTZ DEFAULT now())"
+    )
+    _INGEST_PG_READY = True
 
 
 class CloudVectorStoreManager:
@@ -85,12 +99,31 @@ class CloudVectorStoreManager:
         )
 
     def _load_ingest_state(self) -> Dict[str, str]:
+        if pg.pg_enabled():
+            try:
+                _ensure_ingest_table()
+                rows = pg.query("SELECT doc_id, content_hash FROM ingest_state")
+                return {doc_id: h for doc_id, h in rows}
+            except Exception as e:  # noqa: BLE001
+                logger.warning("Postgres ingest-state read failed, using file: %s", e)
         if not INGEST_STATE_FILE.exists():
             return {}
         with open(INGEST_STATE_FILE, encoding="utf-8") as f:
             return json.load(f)
 
     def _save_ingest_state(self, state: Dict[str, str]) -> None:
+        if pg.pg_enabled():
+            try:
+                _ensure_ingest_table()
+                for doc_id, h in state.items():
+                    pg.execute(
+                        "INSERT INTO ingest_state (doc_id, content_hash, updated_at) "
+                        "VALUES (%(d)s, %(h)s, now()) ON CONFLICT (doc_id) DO UPDATE SET "
+                        "content_hash = EXCLUDED.content_hash, updated_at = now()",
+                        {"d": doc_id, "h": h},
+                    )
+            except Exception as e:  # noqa: BLE001
+                logger.warning("Postgres ingest-state write failed: %s", e)
         INGEST_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(INGEST_STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(state, f, indent=2)

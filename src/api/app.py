@@ -55,6 +55,7 @@ from src.api.models import (
     QueryResponse,
     SourcesResponse,
 )
+from src.core.blob_store import read_metrics_json
 from src.core.cache import answer_cache, embedding_cache, retrieval_cache
 from src.core.logging import configure_logging
 from src.core.schema import ConfigError, validate_config
@@ -217,10 +218,6 @@ async def _unhandled_exception(request: Request, exc: Exception) -> JSONResponse
     return resp
 
 
-# ── Background multi-LLM benchmark job ──────────────────────────────────────
-# One benchmark runs at a time per process. State is a module global guarded by
-# a lock; a watcher thread records the outcome when the subprocess exits. The
-# `_spawn` seam lets tests run the job body synchronously (or not at all).
 _BENCH_LOCK = threading.Lock()
 _BENCH: dict = {
     "state": "idle", "started_at": None, "finished_at": None,
@@ -370,12 +367,8 @@ def models() -> ModelsResponse:
 
     primary_default = cfg("models", "primary_metric", default="answer_correctness")
     specs = {s.name: {"provider": s.provider, "model": s.model} for s in llm.registry()}
-    path = ROOT_DIR / cfg("paths", "metrics_dir", default="metrics") / "model_scores.json"
-    if not path.exists():
-        return ModelsResponse(champion=None, primary_metric=primary_default, specs=specs)
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (ValueError, OSError):
+    data = read_metrics_json("model_scores.json")
+    if not data:
         return ModelsResponse(champion=None, primary_metric=primary_default, specs=specs)
     return ModelsResponse(
         champion=data.get("champion"),
@@ -386,15 +379,10 @@ def models() -> ModelsResponse:
     )
 
 
-def _finite_scores(path) -> dict:
-    """Load a `{scores: {...}}` metrics file, keeping only finite float values.
-    NaN/inf (e.g. Ragas failing a metric) are dropped so the JSON stays valid."""
-    if not path.exists():
-        return {}
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8")).get("scores", {})
-    except (ValueError, OSError):
-        return {}
+def _finite_scores(data) -> dict:
+    """Keep only finite float values from a `{scores: {...}}` payload. NaN/inf
+    (e.g. Ragas failing a metric) are dropped so the JSON stays valid."""
+    raw = data.get("scores", {}) if isinstance(data, dict) else {}
     out = {}
     for name, val in raw.items():
         try:
@@ -414,17 +402,12 @@ def eval_scores() -> EvalResponse:
     ``pipeline.py``). Lets the dashboard render the quality panel from live data
     instead of a hardcoded metric list.
     """
-    metrics_dir = ROOT_DIR / cfg("paths", "metrics_dir", default="metrics")
-    latest_path = metrics_dir / "latest_eval.json"
-    updated_at = None
-    if latest_path.exists():
-        try:
-            updated_at = json.loads(latest_path.read_text(encoding="utf-8")).get("timestamp")
-        except (ValueError, OSError):
-            updated_at = None
+    latest = read_metrics_json("latest_eval.json")
+    baseline = read_metrics_json("baseline.json")
+    updated_at = latest.get("timestamp") if isinstance(latest, dict) else None
     return EvalResponse(
-        scores=_finite_scores(latest_path),
-        baseline=_finite_scores(metrics_dir / "baseline.json"),
+        scores=_finite_scores(latest),
+        baseline=_finite_scores(baseline),
         updated_at=updated_at,
     )
 

@@ -11,7 +11,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.observability.tracing import traces_path
+from src.core import pg
+from src.observability.tracing import load_traces_pg, traces_path
 
 
 def _percentile(values: List[float], pct: float) -> float:
@@ -26,6 +27,8 @@ def _percentile(values: List[float], pct: float) -> float:
 
 
 def load_traces(path: Optional[Path] = None) -> List[Dict[str, Any]]:
+    if path is None and pg.pg_enabled():
+        return load_traces_pg()
     target = path or traces_path()
     if not target.exists():
         return []

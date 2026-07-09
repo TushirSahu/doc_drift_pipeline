@@ -73,21 +73,20 @@ def test_chat_with_spec_routes_to_that_endpoint(monkeypatch):
     assert seen["spec"] is spec                   # client built from the spec
 
 
-def test_default_chat_spec_prefers_champion(monkeypatch, tmp_path):
-    champ = tmp_path / "champion.json"
-    champ.write_text(json.dumps({
+def test_default_chat_spec_prefers_champion(monkeypatch):
+    champion = {
         "name": "winner",
         "spec": {"name": "winner", "provider": "openai", "model": "best-model",
                  "base_url": "https://router/v1", "api_key_env": "HF_TOKEN"},
-    }), encoding="utf-8")
-    monkeypatch.setattr(llm, "_champion_path", lambda: champ)
+    }
+    monkeypatch.setattr(llm, "read_metrics_json", lambda name: champion)
     spec = llm.default_chat_spec()
     assert spec.name == "winner"
     assert spec.model == "best-model"
 
 
-def test_default_chat_spec_falls_back_to_config(monkeypatch, tmp_path):
-    monkeypatch.setattr(llm, "_champion_path", lambda: tmp_path / "missing.json")
+def test_default_chat_spec_falls_back_to_config(monkeypatch):
+    monkeypatch.setattr(llm, "read_metrics_json", lambda name: None)
     monkeypatch.setattr(llm, "provider", lambda: "ollama")
     monkeypatch.setattr(llm, "chat_model", lambda: "llama3.2:3b")
     spec = llm.default_chat_spec()

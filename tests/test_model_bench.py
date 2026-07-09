@@ -52,6 +52,13 @@ def test_benchmark_writes_scores_and_champion(monkeypatch, tmp_path):
 
     monkeypatch.setattr(model_bench, "export_json", _fake_export)
 
+    def _fake_write(name, payload):
+        (tmp_path / name).write_text(json.dumps(payload), encoding="utf-8")
+        written[name] = payload
+        return tmp_path / name
+
+    monkeypatch.setattr(model_bench, "write_metrics_json", _fake_write)
+
     specs = [
         ModelSpec("weak", "ollama", "llama3.2:3b"),
         ModelSpec("strong", "openai", "big", base_url="https://r/v1", api_key_env="HF_TOKEN"),
@@ -78,6 +85,8 @@ def test_benchmark_writes_scores_and_champion(monkeypatch, tmp_path):
 def test_benchmark_survives_one_failing_model(monkeypatch, tmp_path):
     monkeypatch.setattr(model_bench, "metrics_dir", lambda: tmp_path)
     monkeypatch.setattr(model_bench, "export_json", lambda data, filename: tmp_path / filename)
+    monkeypatch.setattr(model_bench, "write_metrics_json",
+                        lambda name, payload: tmp_path / name)
 
     specs = [ModelSpec("bad", "openai", "x"), ModelSpec("good", "ollama", "y")]
 

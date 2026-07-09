@@ -1,9 +1,9 @@
 """Export evaluation results to metrics/ for tracking over time."""
-import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.core.blob_store import write_metrics_json
 from src.core.settings import ROOT_DIR, cfg
 
 logger = logging.getLogger(__name__)
@@ -24,14 +24,11 @@ def export_csv(df, filename: str) -> Path:
 
 
 def export_json(data: dict, filename: str) -> Path:
-    out = metrics_dir()
-    out.mkdir(parents=True, exist_ok=True)
-    path = out / filename
     payload = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         **data,
     }
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2)
+    # Writes the file and, when DATABASE_URL is set, a durable Postgres blob.
+    path = write_metrics_json(filename, payload)
     logger.info("Exported JSON → %s", path)
     return path

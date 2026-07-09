@@ -16,6 +16,7 @@ import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
+from src.core.blob_store import read_metrics_json
 from src.core.settings import ROOT_DIR, cfg
 
 
@@ -112,17 +113,12 @@ def _legacy_spec() -> ModelSpec:
     )
 
 
-def _champion_path():
-    return ROOT_DIR / cfg("paths", "metrics_dir", default="metrics") / "champion.json"
-
-
 def champion_spec() -> ModelSpec | None:
     """The benchmark-winning model, if a champion has been recorded."""
-    path = _champion_path()
-    if not path.exists():
+    data = read_metrics_json("champion.json")
+    if not data:
         return None
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
         s = data["spec"]
         return ModelSpec(
             name=s["name"],
@@ -131,7 +127,7 @@ def champion_spec() -> ModelSpec | None:
             base_url=s.get("base_url"),
             api_key_env=s.get("api_key_env") or "OPENAI_API_KEY",
         )
-    except (KeyError, ValueError, OSError):
+    except (KeyError, ValueError, TypeError):
         return None
 
 

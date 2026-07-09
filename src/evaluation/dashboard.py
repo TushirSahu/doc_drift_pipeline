@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from src.core.blob_store import read_metrics_json
 from src.evaluation.drift import METRICS
 from src.evaluation.export import metrics_dir
 
@@ -24,13 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 def _load_scores() -> Optional[dict]:
-    path = metrics_dir() / "model_scores.json"
-    if not path.exists():
-        return None
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (ValueError, OSError):
-        return None
+    return read_metrics_json("model_scores.json")
 
 
 def build_dashboard(out_name: str = "dashboard.html") -> Optional[Path]:
