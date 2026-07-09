@@ -8,7 +8,7 @@ from src.core.llm import chat as llm_chat
 from src.core.prompts import load_prompt
 from src.core.settings import cfg
 from src.agentic.tools import get_enabled_tools, tool_descriptions
-from src.agentic.guardrails import check_answer
+from src.agentic.guardrails import check_answer, check_input
 from src.observability.tracing import Tracer
 
 logger = logging.getLogger(__name__)
@@ -54,6 +54,8 @@ class AgentResult(TypedDict, total=False):
     retrieved_contexts: List[str]
     guardrails: Dict[str, Any]
     tools_used: List[str]
+    input_guard: Dict[str, Any]
+    blocked: bool
 
 
 class AgenticController:
@@ -71,6 +73,13 @@ class AgenticController:
     def _system_prompt(self) -> str:
         base = load_prompt("agent_system")
         return f"{base}\n\nAvailable tools:\n{tool_descriptions()}"
+
+    def _blocked_message(self) -> str:
+        return cfg(
+            "guardrails", "blocked_message",
+            default=("I can't help with that request. I answer questions about the "
+                     "DocDrift documentation — please ask about the docs."),
+        )
 
     def _parse_tool_call(self, text: str) -> tuple[str | None, str | None]:
         # 1) Strict format: "TOOL: <name> ARGS: <args>".
@@ -100,6 +109,17 @@ class AgenticController:
 
     def _finalize(self, result: AgentResult) -> AgentResult:
         """Attach guardrail verdict + tool-usage summary to a result dict."""
+        result.setdefault("input_guard", {"allowed": True, "category": None,
+                                           "reasons": ["passed"]})
+        # A request refused by the input filter never ran the model, so the
+        # answer-grounding check doesn't apply — record a passthrough verdict.
+        if result.get("blocked"):
+            result["guardrails"] = {
+                "grounded": True, "grounding_score": 0.0, "has_citation": False,
+                "is_idk": False, "reasons": ["input blocked by guardrail"],
+            }
+            result["tools_used"] = []
+            return result
         verdict = check_answer(result["answer"], result.get("retrieved_contexts", []))
         result["guardrails"] = verdict.to_dict()
         result["tools_used"] = sorted({c["tool"] for c in result.get("tool_calls", [])})
@@ -112,9 +132,30 @@ class AgenticController:
         exactly one ``("final", result_dict)``. Both run() and run_stream()
         consume this, so the loop logic lives in one place.
         """
+        # Layer 2 — screen the question for prompt injection before the model
+        # ever sees it. If flagged, refuse immediately (no LLM call, no tools).
+        if cfg("guardrails", "input_filter", default=True):
+            guard = check_input(question)
+            if not guard.allowed:
+                logger.warning("Input guardrail blocked a request: %s", guard.category)
+                yield "final", {
+                    "answer": self._blocked_message(),
+                    "steps": 0,
+                    "tool_calls": [],
+                    "retrieved_contexts": [],
+                    "blocked": True,
+                    "input_guard": guard.to_dict(),
+                }
+                return
+            input_guard = guard.to_dict()
+        else:
+            input_guard = {"allowed": True, "category": None, "reasons": ["disabled"]}
+
+        # Layer 4 — wrap the user question in a delimiter and feed it in the
+        # user turn so the model treats it as untrusted DATA, not instructions.
         messages = [
             {"role": "system", "content": self._system_prompt()},
-            {"role": "user", "content": question},
+            {"role": "user", "content": f"<user_question>\n{question}\n</user_question>"},
         ]
         tool_calls: List[Dict[str, str]] = []
         retrieved_chunks: List[str] = []
@@ -152,6 +193,8 @@ class AgenticController:
                 "steps": step + 1,
                 "tool_calls": tool_calls,
                 "retrieved_contexts": retrieved_chunks,
+                "blocked": False,
+                "input_guard": input_guard,
             }
             return
 
@@ -160,6 +203,8 @@ class AgenticController:
             "steps": self.max_steps,
             "tool_calls": tool_calls,
             "retrieved_contexts": retrieved_chunks,
+            "blocked": False,
+            "input_guard": input_guard,
         }
 
     def run(self, question: str) -> AgentResult:
@@ -201,4 +246,6 @@ class AgenticController:
             "tools_used": result["tools_used"],
             "retrieved_contexts": result.get("retrieved_contexts", []),
             "guardrails": result["guardrails"],
+            "input_guard": result.get("input_guard", {}),
+            "blocked": result.get("blocked", False),
         }

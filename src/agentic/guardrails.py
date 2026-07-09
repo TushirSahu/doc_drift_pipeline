@@ -38,6 +38,88 @@ def _tokens(text: str) -> set[str]:
     return {t for t in _WORD_RE.findall(text.lower()) if t not in _STOPWORDS and len(t) > 2}
 
 
+# ── Input guardrails (prompt-injection filter) ──────────────────────────────
+# Layer 2 of defense: inspect the *user question* BEFORE it reaches the LLM and
+# refuse the obvious prompt-injection / system-prompt-extraction attempts
+# ("ignore previous instructions", "reveal your system prompt", role hijacks).
+#
+# This is a heuristic, not a proof — a determined attacker can phrase around a
+# regex. It pairs with prompt hardening (Layer 4) and the answer guardrails
+# above; layered, cheap, and adds no extra LLM call. Patterns require an
+# injection *verb* next to an instruction/prompt *target* so ordinary questions
+# about the docs (which never say "ignore all previous instructions") pass.
+_INJECTION_PATTERNS: list[tuple[re.Pattern, str]] = [
+    # Override / erase prior instructions: "ignore the previous instructions".
+    (re.compile(
+        r"\b(ignore|disregard|forget|override|bypass|skip)\b[\s\S]{0,30}"
+        r"\b(previous|prior|earlier|above|preceding|initial|all|any|your|the)\b[\s\S]{0,30}"
+        r"\b(instruction|instructions|command|commands|prompt|prompts|rule|rules|"
+        r"direction|directions|guardrail|guardrails|restriction|restrictions)\b",
+        re.IGNORECASE), "override"),
+    # Extract the system/base prompt: "give me the base prompt".
+    (re.compile(
+        r"\b(reveal|show|print|repeat|display|give|output|tell|share|expose|leak|"
+        r"dump|return|echo|reprint|paste)\b[\s\S]{0,40}"
+        r"\b(system|base|initial|original|developer|hidden|secret|underlying|your)\b[\s\S]{0,25}"
+        r"\b(prompt|prompts|instruction|instructions|message|messages|rules|directive|directives)\b",
+        re.IGNORECASE), "prompt_extraction"),
+    # "what is your system prompt", "print your instructions".
+    (re.compile(
+        r"\b(what('?s| is| are)|repeat|print|say|list)\b[\s\S]{0,30}"
+        r"\b(your|the)\b[\s\S]{0,25}"
+        r"\b(system|base|initial|developer)\s+(prompt|prompts|instructions?|message|rules)\b",
+        re.IGNORECASE), "prompt_extraction"),
+    # "repeat the words/text/everything above".
+    (re.compile(
+        r"\brepeat\b[\s\S]{0,30}\b(words|text|everything|content|lines?)\b[\s\S]{0,20}\babove\b",
+        re.IGNORECASE), "prompt_extraction"),
+    # Role hijack: "you are now ...", "pretend to be ...", "act as ...".
+    (re.compile(
+        r"\b(you are now|you're now|from now on,? you (are|will)|act as|pretend (to be|you)|"
+        r"roleplay as|behave as|imagine you are|simulate)\b",
+        re.IGNORECASE), "role_hijack"),
+    # Injected "new instructions:" block.
+    (re.compile(
+        r"\b(new|updated|revised|real|actual)\b[\s\S]{0,15}"
+        r"\b(instructions?|rules|system prompt|directive)\b[\s\S]{0,5}:",
+        re.IGNORECASE), "role_hijack"),
+    # Named jailbreaks.
+    (re.compile(
+        r"\b(do anything now|developer mode|jailbreak|DAN mode|sudo mode)\b",
+        re.IGNORECASE), "jailbreak"),
+]
+
+
+@dataclass
+class InputGuardResult:
+    allowed: bool
+    category: str | None
+    reasons: List[str]
+
+    def to_dict(self) -> Dict:
+        return asdict(self)
+
+
+def check_input(question: str) -> InputGuardResult:
+    """Screen a user question for prompt-injection intent before the LLM sees it.
+
+    Returns ``allowed=False`` with the matched ``category`` when the text looks
+    like an override/extraction/role-hijack/jailbreak attempt; otherwise allows.
+    """
+    text = (question or "").strip()
+    if not text:
+        # Empty is handled by API validation; nothing to screen here.
+        return InputGuardResult(allowed=True, category=None, reasons=["empty"])
+    for pattern, category in _INJECTION_PATTERNS:
+        if pattern.search(text):
+            return InputGuardResult(
+                allowed=False,
+                category=category,
+                reasons=[f"blocked: possible prompt injection ({category})"],
+            )
+    return InputGuardResult(allowed=True, category=None, reasons=["passed"])
+
+
 def grounding_score(answer: str, contexts: List[str]) -> float:
     """Fraction of the answer's meaningful tokens that appear in the context.
 

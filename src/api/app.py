@@ -205,7 +205,9 @@ def query(req: QueryRequest) -> QueryResponse:
 
     guard = result["guardrails"]
     warning = None
-    if not guard["grounded"]:
+    if result.get("blocked"):
+        warning = "Request blocked by input guardrail (possible prompt injection)."
+    elif not guard["grounded"]:
         warning = "Answer may not be fully grounded in the documentation. " + \
                   "; ".join(guard["reasons"])
 

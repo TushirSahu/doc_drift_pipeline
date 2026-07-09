@@ -99,6 +99,8 @@ api:
 guardrails:
   min_grounding: 0.3       # answers below this overlap with context are flagged
   require_citation: true   # final answer must include [Source: ...]
+  input_filter: true       # screen questions for prompt injection before the LLM (Layer 2)
+  blocked_message: "I can't help with that request. I answer questions about the DocDrift documentation — please ask about the docs."
 
 cache:
   embedding_maxsize: 2048
