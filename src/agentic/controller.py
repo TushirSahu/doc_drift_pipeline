@@ -8,7 +8,9 @@ from src.core.llm import chat as llm_chat
 from src.core.prompts import load_prompt
 from src.core.settings import cfg
 from src.agentic.tools import get_enabled_tools, tool_descriptions
-from src.agentic.guardrails import check_answer, check_input
+from src.agentic.guardrails import (
+    CANARY_DIRECTIVE, check_answer, check_input, check_output,
+)
 from src.observability.tracing import Tracer
 
 logger = logging.getLogger(__name__)
@@ -55,6 +57,7 @@ class AgentResult(TypedDict, total=False):
     guardrails: Dict[str, Any]
     tools_used: List[str]
     input_guard: Dict[str, Any]
+    output_guard: Dict[str, Any]
     blocked: bool
 
 
@@ -72,7 +75,10 @@ class AgenticController:
 
     def _system_prompt(self) -> str:
         base = load_prompt("agent_system")
-        return f"{base}\n\nAvailable tools:\n{tool_descriptions()}"
+        # The canary directive must be part of the prompt the model actually
+        # sees, so check_output can detect it leaking back out in an answer.
+        return (f"{base}\n\nAvailable tools:\n{tool_descriptions()}"
+                f"\n\n{CANARY_DIRECTIVE}")
 
     def _blocked_message(self) -> str:
         return cfg(
@@ -111,6 +117,8 @@ class AgenticController:
         """Attach guardrail verdict + tool-usage summary to a result dict."""
         result.setdefault("input_guard", {"allowed": True, "category": None,
                                            "reasons": ["passed"]})
+        result.setdefault("output_guard", {"leaked": False, "category": None,
+                                            "overlap": 0.0, "reasons": ["passed"]})
         # A request refused by the input filter never ran the model, so the
         # answer-grounding check doesn't apply — record a passthrough verdict.
         if result.get("blocked"):
@@ -120,6 +128,18 @@ class AgenticController:
             }
             result["tools_used"] = []
             return result
+
+        # Layer 3 — screen the final answer for leaked system-prompt content
+        # before it leaves the controller. On a leak, withhold the answer and
+        # return the safe refusal instead (the trace still records the attempt).
+        if cfg("guardrails", "output_filter", default=True):
+            out = check_output(result["answer"], self._system_prompt())
+            result["output_guard"] = out.to_dict()
+            if out.leaked:
+                logger.warning("Output guardrail withheld a leak: %s", out.category)
+                result["answer"] = self._blocked_message()
+                result["retrieved_contexts"] = []
+
         verdict = check_answer(result["answer"], result.get("retrieved_contexts", []))
         result["guardrails"] = verdict.to_dict()
         result["tools_used"] = sorted({c["tool"] for c in result.get("tool_calls", [])})
