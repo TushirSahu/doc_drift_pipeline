@@ -103,6 +103,85 @@ def test_feedback_rejects_bad_rating(monkeypatch):
     assert resp.status_code == 422  # Literal["up","down"] validation
 
 
+def test_security_headers_present():
+    with TestClient(app) as client:
+        resp = client.get("/health")
+    assert resp.headers["X-Content-Type-Options"] == "nosniff"
+    assert resp.headers["X-Frame-Options"] == "DENY"
+    assert "default-src 'none'" in resp.headers["Content-Security-Policy"]
+    assert resp.headers["Cache-Control"] == "no-store"
+    # Framework/version is not advertised.
+    assert resp.headers["Server"] == "DocDrift"
+
+
+def test_missing_api_key_is_rejected(monkeypatch):
+    monkeypatch.setattr(app_module, "AgenticController", _FakeController)
+    monkeypatch.setenv("DOCDRIFT_API_KEY", "secret")
+    with TestClient(app) as client:
+        resp = client.post("/query", json={"question": "hi"})  # no header
+    assert resp.status_code == 401
+
+
+def test_unhandled_error_is_opaque(monkeypatch):
+    """A crash returns a generic message + correlation id — never a stack trace."""
+    monkeypatch.delenv("DOCDRIFT_API_KEY", raising=False)
+
+    class _BoomController:
+        def __init__(self, *a, **k):
+            pass
+
+        def run(self, question):
+            raise RuntimeError("secret path /Users/db/creds leaked here")
+
+    monkeypatch.setattr(app_module, "AgenticController", _BoomController)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        resp = client.post("/query", json={"question": "hi"})
+    assert resp.status_code == 500
+    body = resp.json()
+    assert body["detail"] == "Internal server error"
+    assert "error_id" in body
+    assert "secret path" not in resp.text  # internals never reach the client
+
+
+def test_query_rejected_when_saturated(monkeypatch):
+    monkeypatch.delenv("DOCDRIFT_API_KEY", raising=False)
+    monkeypatch.setattr(app_module, "AgenticController", _FakeController)
+
+    class _FullSem:
+        def acquire(self, blocking=False):
+            return False
+
+        def release(self):
+            pass
+
+    monkeypatch.setattr(app_module, "_QUERY_SEM", _FullSem())
+    with TestClient(app) as client:
+        resp = client.post("/query", json={"question": "hi"})
+    assert resp.status_code == 503
+    assert resp.headers["Retry-After"] == "1"
+
+
+def test_feedback_rejects_oversized_answer(monkeypatch):
+    monkeypatch.delenv("DOCDRIFT_API_KEY", raising=False)
+    with TestClient(app) as client:
+        resp = client.post("/feedback", json={
+            "question": "q", "answer": "x" * 9000, "rating": "up",
+        })
+    assert resp.status_code == 422  # exceeds max_length
+
+
+def test_env_flag_parses_truthy_values():
+    from src.api.app import _env_flag
+    import os as _os
+
+    _os.environ["_DOCDRIFT_TEST_FLAG"] = "0"
+    assert _env_flag("_DOCDRIFT_TEST_FLAG", True) is False
+    _os.environ["_DOCDRIFT_TEST_FLAG"] = "on"
+    assert _env_flag("_DOCDRIFT_TEST_FLAG", False) is True
+    del _os.environ["_DOCDRIFT_TEST_FLAG"]
+    assert _env_flag("_DOCDRIFT_TEST_FLAG", True) is True
+
+
 def test_eval_returns_scores_and_baseline(monkeypatch):
     monkeypatch.delenv("DOCDRIFT_API_KEY", raising=False)
     with TestClient(app) as client:

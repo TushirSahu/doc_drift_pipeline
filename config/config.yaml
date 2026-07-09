@@ -95,6 +95,10 @@ api:
   rate_limit_per_min: 60    # per-IP; makes a keyless public demo safe (0 disables)
   allow_benchmark_trigger: true  # let POST /models/benchmark spawn --compare-models
                                   # (off by default so a public demo can't be abused)
+  security_headers: true    # send nosniff/XFO/CSP/no-store on every response
+  max_concurrent_queries: 16  # ceiling on in-flight agent runs; excess gets 503
+  # Also honored via env: DOCDRIFT_API_KEY (auth), DOCDRIFT_CORS_ORIGINS,
+  # DOCDRIFT_ALLOWED_HOSTS (Host allowlist), DOCDRIFT_EXPOSE_DOCS=0 (hide /docs).
 
 guardrails:
   min_grounding: 0.3       # answers below this overlap with context are flagged

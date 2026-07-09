@@ -19,12 +19,14 @@ Run:  uvicorn src.api.app:app --host 0.0.0.0 --port 8000
 """
 from __future__ import annotations
 
+import hmac
 import logging
 import math
 import os
 import subprocess
 import sys
 import threading
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -32,8 +34,9 @@ import json
 import time
 from collections import OrderedDict, deque
 
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.core.settings import ROOT_DIR, cfg
@@ -72,11 +75,34 @@ async def lifespan(app: FastAPI):
     yield
 
 
+def _env_flag(name: str, default: bool) -> bool:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return val.strip().lower() in ("1", "true", "yes", "on")
+
+
+# Interactive API docs expose the full endpoint/schema surface. Fine for a demo,
+# but a hardened deployment can hide them with DOCDRIFT_EXPOSE_DOCS=0.
+_EXPOSE_DOCS = _env_flag("DOCDRIFT_EXPOSE_DOCS", True)
+
 app = FastAPI(
     title="DocDrift API",
     version="1.0.0",
     description="Agentic RAG over your documentation, with drift detection.",
     lifespan=lifespan,
+    docs_url="/docs" if _EXPOSE_DOCS else None,
+    redoc_url="/redoc" if _EXPOSE_DOCS else None,
+    openapi_url="/openapi.json" if _EXPOSE_DOCS else None,
+)
+
+# Reject requests with a spoofed/unexpected Host header (defeats Host-header
+# poisoning and cache attacks). Default "*" keeps local dev + the demo working;
+# set DOCDRIFT_ALLOWED_HOSTS to a comma-separated allowlist in production.
+_hosts = os.getenv("DOCDRIFT_ALLOWED_HOSTS", "*")
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["*"] if _hosts == "*" else [h.strip() for h in _hosts.split(",")],
 )
 
 # Allow the browser demo (and any frontend) to call the API. For a real
@@ -89,11 +115,50 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Response hardening: hostile-input hygiene + no-store on API JSON, and hide any
+# framework/version detail. Applied to every response, including errors.
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+    "Cache-Control": "no-store",
+}
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    if cfg("api", "security_headers", default=True):
+        for k, v in _SECURITY_HEADERS.items():
+            response.headers.setdefault(k, v)
+        # Don't advertise the server implementation/version.
+        response.headers["Server"] = "DocDrift"
+    return response
+
 # Per-IP rate limit (fixed 60s window) so a keyless public demo is safe.
 # Bounded LRU of IPs so memory can't grow without limit. Per-process; for
 # multi-instance use a shared store (Redis). Set api.rate_limit_per_min (0 disables).
 _RL_MAX_IPS = 10_000
 _RL: "OrderedDict[str, deque]" = OrderedDict()
+
+# Cap concurrent expensive agent runs. A flood of simultaneous /query calls each
+# fans out to several LLM calls; without a ceiling that exhausts memory/threads
+# and degrades everyone. When saturated we shed load fast (503) instead of
+# queueing unbounded. Sized once at boot; per-process.
+_MAX_CONCURRENT_QUERIES = max(1, int(cfg("api", "max_concurrent_queries", default=16)))
+_QUERY_SEM = threading.BoundedSemaphore(_MAX_CONCURRENT_QUERIES)
+
+
+def _acquire_query_slot() -> None:
+    """Take a query slot or reject with 503 when the server is saturated."""
+    if not _QUERY_SEM.acquire(blocking=False):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Server busy — too many concurrent queries. Retry shortly.",
+            headers={"Retry-After": "1"},
+        )
 
 
 @app.middleware("http")
@@ -110,9 +175,11 @@ async def _rate_limit(request, call_next):
         while hits and now - hits[0] > 60:
             hits.popleft()
         if len(hits) >= limit:
+            retry_after = max(1, int(60 - (now - hits[0])))
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Rate limit exceeded — try again shortly."},
+                headers={"Retry-After": str(retry_after)},
             )
         hits.append(now)
         while len(_RL) > _RL_MAX_IPS:   # evict least-recently-used IPs
@@ -125,10 +192,32 @@ def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
     expected = os.getenv("DOCDRIFT_API_KEY")
     if not expected:
         return  # auth disabled in dev
-    if x_api_key != expected:
+    # Constant-time compare so response timing can't be used to recover the key
+    # byte by byte.
+    if not x_api_key or not hmac.compare_digest(x_api_key, expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing API key"
         )
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception(request: Request, exc: Exception) -> JSONResponse:
+    """Never leak a stack trace, file path, or backend error to the client.
+
+    The full error is logged server-side with a short id; the client gets only
+    that id so an operator can correlate a report to the log without exposing
+    internals to an attacker.
+    """
+    error_id = uuid.uuid4().hex[:12]
+    logger.exception("Unhandled error %s on %s %s", error_id,
+                     request.method, request.url.path)
+    resp = JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Internal server error", "error_id": error_id},
+    )
+    for k, v in _SECURITY_HEADERS.items():
+        resp.headers.setdefault(k, v)
+    return resp
 
 
 # ── Background multi-LLM benchmark job ──────────────────────────────────────
@@ -182,7 +271,10 @@ def health() -> HealthResponse:
         validate_config()
         checks["config"] = "ok"
     except ConfigError as exc:
-        checks["config"] = f"invalid: {exc}"
+        # The exception text can contain file paths / config internals — log it
+        # server-side, expose only a generic status to the caller.
+        logger.error("Config validation failed at /health: %s", exc)
+        checks["config"] = "invalid"
 
     # Qdrant reachability (best-effort; never crash the health endpoint).
     try:
@@ -201,7 +293,11 @@ def health() -> HealthResponse:
 def query(req: QueryRequest) -> QueryResponse:
     # Controller construction is cheap; the shared vector store handles connection
     # reuse. Constructing per request keeps the handler easy to test/mock.
-    result = AgenticController().run(req.question)
+    _acquire_query_slot()
+    try:
+        result = AgenticController().run(req.question)
+    finally:
+        _QUERY_SEM.release()
 
     guard = result["guardrails"]
     warning = None
@@ -226,9 +322,15 @@ def query(req: QueryRequest) -> QueryResponse:
 @app.post("/query/stream", dependencies=[Depends(require_api_key)])
 def query_stream(req: QueryRequest) -> StreamingResponse:
     """Same as /query but streamed as Server-Sent Events (step → token → done)."""
+    # Hold a concurrency slot for the whole stream; release when it ends.
+    _acquire_query_slot()
+
     def events():
-        for event in AgenticController().run_stream(req.question):
-            yield f"data: {json.dumps(event)}\n\n"
+        try:
+            for event in AgenticController().run_stream(req.question):
+                yield f"data: {json.dumps(event)}\n\n"
+        finally:
+            _QUERY_SEM.release()
 
     return StreamingResponse(events(), media_type="text/event-stream")
 

@@ -75,11 +75,12 @@ class BenchmarkStatusResponse(BaseModel):
 
 class FeedbackRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
-    answer: str = Field(min_length=1)
+    answer: str = Field(min_length=1, max_length=8000)
     rating: Literal["up", "down"]
-    trace_id: Optional[str] = None
-    correct_answer: Optional[str] = None  # a correction turns this into a gold case
-    comment: Optional[str] = None
+    trace_id: Optional[str] = Field(default=None, max_length=64)
+    # a correction turns this into a gold case
+    correct_answer: Optional[str] = Field(default=None, max_length=8000)
+    comment: Optional[str] = Field(default=None, max_length=2000)
 
 
 class FeedbackResponse(BaseModel):
