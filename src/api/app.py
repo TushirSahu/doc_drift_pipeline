@@ -116,8 +116,8 @@ app.add_middleware(
 )
 
 
-# Response hardening: hostile-input hygiene + no-store on API JSON, and hide any
-# framework/version detail. Applied to every response, including errors.
+# Sent on every response (including errors): content-type/framing hygiene,
+# no-store on API JSON, and a generic Server header.
 _SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
@@ -143,10 +143,8 @@ async def _security_headers(request: Request, call_next):
 _RL_MAX_IPS = 10_000
 _RL: "OrderedDict[str, deque]" = OrderedDict()
 
-# Cap concurrent expensive agent runs. A flood of simultaneous /query calls each
-# fans out to several LLM calls; without a ceiling that exhausts memory/threads
-# and degrades everyone. When saturated we shed load fast (503) instead of
-# queueing unbounded. Sized once at boot; per-process.
+# Global ceiling on concurrent agent runs — each /query fans out to several LLM
+# calls, so an unbounded flood exhausts memory/threads. Excess is shed with 503.
 _MAX_CONCURRENT_QUERIES = max(1, int(cfg("api", "max_concurrent_queries", default=16)))
 _QUERY_SEM = threading.BoundedSemaphore(_MAX_CONCURRENT_QUERIES)
 
@@ -191,9 +189,8 @@ def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
     """Reject requests without the configured API key. No key set = dev mode."""
     expected = os.getenv("DOCDRIFT_API_KEY")
     if not expected:
-        return  # auth disabled in dev
-    # Constant-time compare so response timing can't be used to recover the key
-    # byte by byte.
+        return
+    # Constant-time compare so timing can't recover the key byte by byte.
     if not x_api_key or not hmac.compare_digest(x_api_key, expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing API key"
@@ -271,8 +268,7 @@ def health() -> HealthResponse:
         validate_config()
         checks["config"] = "ok"
     except ConfigError as exc:
-        # The exception text can contain file paths / config internals — log it
-        # server-side, expose only a generic status to the caller.
+        # Detail can contain file paths — log it, expose only a generic status.
         logger.error("Config validation failed at /health: %s", exc)
         checks["config"] = "invalid"
 

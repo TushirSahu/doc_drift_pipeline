@@ -140,9 +140,8 @@ class AgenticController:
             result["tools_used"] = []
             return result
 
-        # Layer 3 — screen the final answer for leaked system-prompt content
-        # before it leaves the controller. On a leak, withhold the answer and
-        # return the safe refusal instead (the trace still records the attempt).
+        # Layer 3 — withhold an answer that leaked the system prompt, returning
+        # the safe refusal instead (the trace still records the attempt).
         if cfg("guardrails", "output_filter", default=True):
             out = check_output(result["answer"], self._system_prompt())
             result["output_guard"] = out.to_dict()
@@ -253,8 +252,7 @@ class AgenticController:
             if key is not None:
                 hit = answer_cache.get(key)
                 if hit is not None:
-                    # Whole agent loop skipped — return the stored verdict as-is,
-                    # only flagging that it came from cache.
+                    # Agent loop skipped — return the stored verdict, flag as cached.
                     cached = dict(hit)
                     cached["cached"] = True
                     tracer.update(
@@ -274,8 +272,7 @@ class AgenticController:
             result = self._finalize(result)
             result.setdefault("cached", False)
 
-            # Only cache real answers — never a request the input filter refused
-            # (cheap to recompute, and we want the guard to re-run each time).
+            # Never cache a refused request — keep the input guard live each time.
             if key is not None and not result.get("blocked"):
                 answer_cache.set(key, result)
 
