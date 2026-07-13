@@ -80,14 +80,6 @@ def search_docs(query: str, limit: int | None = None) -> str:
     return "\n\n".join(parts)
 
 
-def web_search(query: str) -> str:
-    """Stub — disabled in production for safety."""
-    return (
-        f"[web_search stub] Live web search is not configured. "
-        f"Query: '{query}'. Use search_docs for local documentation."
-    )
-
-
 TOOL_REGISTRY: Dict[str, Dict[str, Any]] = {
     "calculator": {
         "fn": calculator,
@@ -96,10 +88,6 @@ TOOL_REGISTRY: Dict[str, Dict[str, Any]] = {
     "search_docs": {
         "fn": search_docs,
         "description": "Search ingested markdown docs for relevant context",
-    },
-    "web_search": {
-        "fn": web_search,
-        "description": "Search the web (stub — not enabled by default)",
     },
 }
 

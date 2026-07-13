@@ -32,7 +32,6 @@ def test_enabled_tools_whitelist():
     tools = get_enabled_tools()
     assert "search_docs" in tools
     assert "calculator" in tools
-    assert "web_search" not in tools  # disabled in config
 
 
 def test_controller_detects_final_answer():

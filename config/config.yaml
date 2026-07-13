@@ -81,7 +81,6 @@ agentic:
   tools:
     - calculator
     - search_docs
-  # web_search is available but disabled by default (stub only)
 
 paths:
   data_dir: "data"
