@@ -1,13 +1,5 @@
 """
 Lightweight in-process TTL + LRU cache.
-
-Why: Embeddings are deterministic — embedding the same chunk or the same
-repeated user query twice is wasted latency and compute. In an eval loop or a
-busy API the same questions recur constantly. Caching cuts both response time
-and load on Ollama/Qdrant, which are the two costs production users feel most.
-
-This is intentionally dependency-free (no Redis). For a single-process service
-it's plenty; swapping in a shared cache later only touches this file.
 """
 from __future__ import annotations
 
@@ -91,7 +83,4 @@ class TTLCache:
 # Shared instances used across the app.
 embedding_cache = TTLCache(maxsize=2048, ttl=86400.0)  # embeddings are stable
 retrieval_cache = TTLCache(maxsize=512, ttl=600.0)      # results can go stale on re-ingest
-# Full agent answers keyed by (model, prompt version, normalized question); a
-# repeat skips the whole agent loop. Short TTL + cleared on re-ingest so a doc
-# change never serves a stale answer.
 answer_cache = TTLCache(maxsize=256, ttl=600.0)

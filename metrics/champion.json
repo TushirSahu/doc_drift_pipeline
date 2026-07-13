@@ -1,13 +1,13 @@
 {
-  "created_at": "2026-07-06T13:15:12.731373+00:00",
-  "name": "llama-3.1-8b-hf",
+  "created_at": "2026-07-09T11:25:55.710153+00:00",
+  "name": "good",
   "primary_metric": "answer_correctness",
-  "score": NaN,
+  "score": 0.7,
   "spec": {
-    "name": "llama-3.1-8b-hf",
-    "provider": "openai",
-    "model": "meta-llama/Llama-3.1-8B-Instruct:cheapest",
-    "base_url": "https://router.huggingface.co/v1",
-    "api_key_env": "HF_TOKEN"
+    "name": "good",
+    "provider": "ollama",
+    "model": "y",
+    "base_url": null,
+    "api_key_env": "OPENAI_API_KEY"
   }
 }
