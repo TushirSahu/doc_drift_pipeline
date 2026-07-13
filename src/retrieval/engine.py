@@ -8,7 +8,7 @@ Flow:
   4. Optional: LLM rerank to pick the best top_k
 """
 import logging
-from typing import List
+from typing import List, Tuple
 
 from src.core.cache import make_key, retrieval_cache
 from src.core.settings import cfg
@@ -22,6 +22,17 @@ logger = logging.getLogger(__name__)
 class RetrievalEngine:
     def __init__(self, vectorstore):
         self.vs = vectorstore
+        # Chunk text -> source doc_id, filled from raw hits. The pipeline never
+        # mutates chunk text, so this lookup stays valid for the final subset and
+        # lets retrieve_with_sources attach the source without a pipeline rewrite.
+        self._source_index: dict[str, str] = {}
+
+    def retrieve_with_sources(
+        self, query: str, **kwargs
+    ) -> List[Tuple[str, str]]:
+        """Like retrieve(), but pairs each chunk with its source doc_id."""
+        texts = self.retrieve(query, **kwargs)
+        return [(t, self._source_index.get(t, "unknown")) for t in texts]
 
     def retrieve(
         self,
@@ -86,6 +97,10 @@ class RetrievalEngine:
             for hit in hits
             if hit.payload and "text" in hit.payload
         ]
+        # Remember each chunk's source so retrieve_with_sources can cite it.
+        for hit in hits:
+            if hit.payload and "text" in hit.payload:
+                self._source_index[hit.payload["text"]] = hit.payload.get("doc_id", "unknown")
 
         if use_hybrid:
             corpus = self.vs.get_corpus_texts()

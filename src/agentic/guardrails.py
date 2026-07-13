@@ -212,6 +212,86 @@ class GuardrailResult:
         return asdict(self)
 
 
+# ── Citation-accuracy audit ─────────────────────────────────────────────────
+# check_answer only checks a citation *exists*. This checks it is *right*: that
+# the cited source was actually retrieved and that the answer is grounded in that
+# source specifically — catching an invented source or a confident miscitation.
+# search_docs tags each chunk "[Chunk N | Source: <doc_id>]", so both the answer's
+# [Source: ...] and the per-source chunks are parseable, no LLM call needed.
+_CITE_CAP = re.compile(r"\[source:\s*([^\]]+?)\s*\]", re.IGNORECASE)
+_CHUNK_HEADER_RE = re.compile(
+    r"\[chunk\s*\d+\s*\|\s*source:\s*([^\]]+?)\s*\]", re.IGNORECASE)
+
+
+def _contexts_by_source(contexts: List[str]) -> Dict[str, List[str]]:
+    """Group retrieved chunk text by its source doc_id, parsed from the headers."""
+    by: Dict[str, List[str]] = {}
+    for ctx in contexts:
+        matches = list(_CHUNK_HEADER_RE.finditer(ctx))
+        if not matches:
+            by.setdefault("unknown", []).append(ctx)
+            continue
+        for i, m in enumerate(matches):
+            src = m.group(1).strip()
+            start = m.end()
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(ctx)
+            by.setdefault(src, []).append(ctx[start:end].strip())
+    return by
+
+
+@dataclass
+class CitationAuditResult:
+    verdict: str                 # accurate | corrected | invented | unsupported | no_citation
+    cited: List[str]
+    corrected_to: str | None
+    score: float
+    reasons: List[str]
+
+    def to_dict(self) -> Dict:
+        return asdict(self)
+
+
+def rewrite_citation(answer: str, source: str) -> str:
+    """Replace every ``[Source: ...]`` in the answer with the corrected source."""
+    return _CITATION_RE.sub(f"[Source: {source}]", answer or "")
+
+
+def check_citation_accuracy(
+    answer: str,
+    contexts: List[str],
+    min_grounding: float = 0.3,
+) -> CitationAuditResult:
+    """Verify the answer's citation names a retrieved source that actually
+    supports it; suggest the correct source when the answer is grounded in a
+    different one."""
+    cited = [m.group(1).strip() for m in _CITE_CAP.finditer(answer or "")]
+    if not cited:
+        return CitationAuditResult("no_citation", [], None, 0.0,
+                                   ["no citation to audit"])
+
+    by_source = _contexts_by_source(contexts)
+    src_scores = {s: grounding_score(answer, chunks) for s, chunks in by_source.items()}
+
+    for c in cited:
+        if src_scores.get(c, 0.0) >= min_grounding:
+            return CitationAuditResult("accurate", cited, None,
+                                       round(src_scores[c], 3),
+                                       ["citation supported by its source"])
+
+    best_src, best_score = (None, 0.0)
+    if src_scores:
+        best_src, best_score = max(src_scores.items(), key=lambda kv: kv[1])
+
+    if best_src is not None and best_score >= min_grounding and best_src not in cited:
+        return CitationAuditResult("corrected", cited, best_src, round(best_score, 3),
+                                   [f"answer grounded in '{best_src}', not cited {cited}"])
+    if not any(c in src_scores for c in cited):
+        return CitationAuditResult("invented", cited, None, round(best_score, 3),
+                                   [f"cited source(s) not retrieved: {cited}"])
+    return CitationAuditResult("unsupported", cited, None, round(best_score, 3),
+                               ["citation not supported by any retrieved source"])
+
+
 def check_answer(
     answer: str,
     contexts: List[str],

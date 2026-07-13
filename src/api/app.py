@@ -293,12 +293,18 @@ def query(req: QueryRequest) -> QueryResponse:
         _QUERY_SEM.release()
 
     guard = result["guardrails"]
+    audit = result.get("citation_audit", {})
     warning = None
     if result.get("blocked"):
         warning = "Request blocked by input guardrail (possible prompt injection)."
     elif not guard["grounded"]:
         warning = "Answer may not be fully grounded in the documentation. " + \
                   "; ".join(guard["reasons"])
+    elif audit.get("verdict") in ("invented", "unsupported"):
+        warning = "Citation could not be verified against the retrieved sources."
+    elif audit.get("verdict") == "corrected":
+        warning = f"Citation auto-corrected to the supporting source " \
+                  f"({audit.get('corrected_to')})."
 
     return QueryResponse(
         answer=result["answer"],
@@ -309,6 +315,7 @@ def query(req: QueryRequest) -> QueryResponse:
         guardrails=guard,
         warning=warning,
         cached=result.get("cached", False),
+        citation_audit=audit or None,
     )
 
 

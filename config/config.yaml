@@ -105,6 +105,8 @@ guardrails:
   require_citation: true   # final answer must include [Source: ...]
   input_filter: true       # screen questions for prompt injection before the LLM (Layer 2)
   output_filter: true      # withhold answers that leak the system prompt (Layer 3)
+  citation_audit: true     # verify [Source: ...] is real + supported; auto-correct miscites
+  citation_min_grounding: 0.3  # answer-vs-cited-source overlap needed to count as supported
   blocked_message: "I can't help with that request. I answer questions about the DocDrift documentation — please ask about the docs."
 
 cache:

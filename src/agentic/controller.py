@@ -10,7 +10,8 @@ from src.core.prompts import load_prompt, prompt_version
 from src.core.settings import cfg
 from src.agentic.tools import get_enabled_tools, tool_descriptions
 from src.agentic.guardrails import (
-    CANARY_DIRECTIVE, check_answer, check_input, check_output,
+    CANARY_DIRECTIVE, check_answer, check_citation_accuracy, check_input,
+    check_output, rewrite_citation,
 )
 from src.observability.tracing import Tracer
 
@@ -68,6 +69,7 @@ class AgentResult(TypedDict, total=False):
     tools_used: List[str]
     input_guard: Dict[str, Any]
     output_guard: Dict[str, Any]
+    citation_audit: Dict[str, Any]
     blocked: bool
     cached: bool
 
@@ -130,6 +132,9 @@ class AgenticController:
                                            "reasons": ["passed"]})
         result.setdefault("output_guard", {"leaked": False, "category": None,
                                             "overlap": 0.0, "reasons": ["passed"]})
+        result.setdefault("citation_audit", {"verdict": "no_citation", "cited": [],
+                                             "corrected_to": None, "score": 0.0,
+                                             "reasons": ["not audited"]})
         # A request refused by the input filter never ran the model, so the
         # answer-grounding check doesn't apply — record a passthrough verdict.
         if result.get("blocked"):
@@ -149,6 +154,18 @@ class AgenticController:
                 logger.warning("Output guardrail withheld a leak: %s", out.category)
                 result["answer"] = self._blocked_message()
                 result["retrieved_contexts"] = []
+
+        # Citation audit — verify the cited source is real and supports the
+        # answer; auto-correct the citation when the answer is grounded in a
+        # different retrieved source.
+        if cfg("guardrails", "citation_audit", default=True):
+            min_g = cfg("guardrails", "citation_min_grounding", default=0.3)
+            audit = check_citation_accuracy(
+                result["answer"], result.get("retrieved_contexts", []), min_g)
+            if audit.verdict == "corrected" and audit.corrected_to:
+                result["answer"] = rewrite_citation(result["answer"], audit.corrected_to)
+                logger.info("Citation auto-corrected to '%s'", audit.corrected_to)
+            result["citation_audit"] = audit.to_dict()
 
         verdict = check_answer(result["answer"], result.get("retrieved_contexts", []))
         result["guardrails"] = verdict.to_dict()

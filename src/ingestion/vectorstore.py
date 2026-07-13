@@ -230,6 +230,10 @@ class CloudVectorStoreManager:
             model_name=model_name,
         )
 
+    def retrieve_with_sources(self, query: str, limit: int | None = None):
+        """Chunks paired with their source doc_id (for citation + audit)."""
+        return self._retriever.retrieve_with_sources(query, limit=limit)
+
 
 # Process-wide cache of vector store managers, keyed by collection name.
 # Each manager opens a Qdrant client and builds an embedder, so constructing a

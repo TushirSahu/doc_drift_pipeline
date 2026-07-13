@@ -69,12 +69,14 @@ def search_docs(query: str, limit: int | None = None) -> str:
     """
     top_k = limit or cfg("retrieval", "top_k", default=2)
     db = get_vectorstore()
-    chunks = db.query_similarity(query, limit=top_k)
+    # Pair each chunk with its source file so the model can cite it accurately
+    # (and the citation-accuracy guardrail can verify the citation).
+    chunks = db.retrieve_with_sources(query, limit=top_k)
     if not chunks:
         return "No relevant documentation found."
     parts = []
-    for i, chunk in enumerate(chunks, 1):
-        parts.append(f"[Chunk {i}]\n{chunk}")
+    for i, (chunk, source) in enumerate(chunks, 1):
+        parts.append(f"[Chunk {i} | Source: {source}]\n{chunk}")
     return "\n\n".join(parts)
 
 

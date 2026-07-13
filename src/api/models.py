@@ -27,6 +27,7 @@ class QueryResponse(BaseModel):
     guardrails: GuardrailInfo
     warning: Optional[str] = None
     cached: bool = False                      # answer served from the answer cache
+    citation_audit: Optional[Dict[str, Any]] = None  # verdict + any auto-correction
 
 
 class IngestResponse(BaseModel):
