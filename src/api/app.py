@@ -55,6 +55,7 @@ from src.api.models import (
     QueryResponse,
     SourcesResponse,
 )
+from src.core import redis_client
 from src.core.blob_store import read_metrics_json
 from src.core.cache import answer_cache, embedding_cache, retrieval_cache
 from src.core.logging import configure_logging
@@ -160,29 +161,59 @@ def _acquire_query_slot() -> None:
         )
 
 
+def _inprocess_rate_limited(ip: str, limit: int, now: float):
+    """Sliding-window per-IP limiter in this process. (blocked, retry_after)."""
+    hits = _RL.get(ip)
+    if hits is None:
+        hits = deque()
+        _RL[ip] = hits
+    _RL.move_to_end(ip)  # mark recently used
+    while hits and now - hits[0] > 60:
+        hits.popleft()
+    if len(hits) >= limit:
+        return True, max(1, int(60 - (now - hits[0])))
+    hits.append(now)
+    while len(_RL) > _RL_MAX_IPS:   # evict least-recently-used IPs
+        _RL.popitem(last=False)
+    return False, 0
+
+
+def _redis_rate_limited(ip: str, limit: int):
+    """Per-IP limiter shared across instances via a Redis fixed-window counter.
+    Raises on any Redis error so the caller can fall back."""
+    r = redis_client.get_redis()
+    window = int(time.time() // 60)
+    key = f"rl:{ip}:{window}"
+    count = r.incr(key)
+    if count == 1:
+        r.expire(key, 60)  # only the first request in the window sets the TTL
+    if count > limit:
+        ttl = r.ttl(key)
+        return True, max(1, ttl if isinstance(ttl, int) and ttl > 0 else 60)
+    return False, 0
+    # ponytail: fixed-window; sliding-window-log if boundary bursts matter.
+
+
 @app.middleware("http")
 async def _rate_limit(request, call_next):
     limit = cfg("api", "rate_limit_per_min", default=0)
     if limit and request.url.path != "/health":
         ip = request.client.host if request.client else "unknown"
-        now = time.time()
-        hits = _RL.get(ip)
-        if hits is None:
-            hits = deque()
-            _RL[ip] = hits
-        _RL.move_to_end(ip)  # mark recently used
-        while hits and now - hits[0] > 60:
-            hits.popleft()
-        if len(hits) >= limit:
-            retry_after = max(1, int(60 - (now - hits[0])))
+        blocked, retry_after, done = False, 0, False
+        if redis_client.redis_enabled():
+            try:
+                blocked, retry_after = _redis_rate_limited(ip, limit)
+                done = True
+            except Exception as e:  # noqa: BLE001 - degrade to in-process, never open the gate
+                logger.warning("Redis rate-limit failed, using in-process: %s", e)
+        if not done:
+            blocked, retry_after = _inprocess_rate_limited(ip, limit, time.time())
+        if blocked:
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Rate limit exceeded — try again shortly."},
                 headers={"Retry-After": str(retry_after)},
             )
-        hits.append(now)
-        while len(_RL) > _RL_MAX_IPS:   # evict least-recently-used IPs
-            _RL.popitem(last=False)
     return await call_next(request)
 
 

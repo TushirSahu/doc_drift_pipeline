@@ -19,3 +19,4 @@ langchain-openai>=0.1.0       # Ragas eval LLM/embeddings for openai-compatible 
 langchain-community>=0.2.0    # Ragas HuggingFace (sentence-transformers) embeddings
 psycopg[binary]>=3.1          # Postgres durable stores (optional; used when DATABASE_URL set)
 psycopg_pool>=3.2             # pooled connections for per-request trace writes
+redis>=5                      # shared rate-limit counter across instances (optional; REDIS_URL)

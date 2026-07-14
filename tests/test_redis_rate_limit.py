@@ -1,0 +1,78 @@
+"""Redis-backed rate limiter (shared across instances) + in-process fallback."""
+import pytest
+
+pytest.importorskip("fastapi")
+from fastapi.testclient import TestClient  # noqa: E402
+
+import src.api.app as app_module  # noqa: E402
+from src.api.app import app  # noqa: E402
+from src.core import redis_client  # noqa: E402
+
+
+class _FakeRedis:
+    """Minimal fixed-window counter store — enough for the limiter."""
+    def __init__(self):
+        self.counts = {}
+
+    def incr(self, key):
+        self.counts[key] = self.counts.get(key, 0) + 1
+        return self.counts[key]
+
+    def expire(self, key, seconds):
+        return True
+
+    def ttl(self, key):
+        return 42
+
+
+def _patch_limit(monkeypatch, value):
+    real = app_module.cfg
+    monkeypatch.setattr(
+        app_module, "cfg",
+        lambda *a, **k: value if a[:2] == ("api", "rate_limit_per_min") else real(*a, **k),
+    )
+
+
+def test_redis_enabled_reflects_env(monkeypatch):
+    monkeypatch.delenv("REDIS_URL", raising=False)
+    assert redis_client.redis_enabled() is False
+    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+    assert redis_client.redis_enabled() is True
+
+
+def test_redis_rate_limited_blocks_past_limit(monkeypatch):
+    fake = _FakeRedis()
+    monkeypatch.setattr(redis_client, "get_redis", lambda: fake)
+    assert app_module._redis_rate_limited("1.2.3.4", 2)[0] is False  # 1
+    assert app_module._redis_rate_limited("1.2.3.4", 2)[0] is False  # 2
+    blocked, retry = app_module._redis_rate_limited("1.2.3.4", 2)    # 3 > 2
+    assert blocked and retry >= 1
+
+
+def test_middleware_uses_redis_when_enabled(monkeypatch):
+    monkeypatch.delenv("DOCDRIFT_API_KEY", raising=False)
+    _patch_limit(monkeypatch, 2)
+    monkeypatch.setattr(redis_client, "redis_enabled", lambda: True)
+    fake = _FakeRedis()
+    monkeypatch.setattr(redis_client, "get_redis", lambda: fake)
+    app_module._RL.clear()
+    with TestClient(app) as client:
+        codes = [client.get("/metrics").status_code for _ in range(4)]
+    assert 429 in codes
+    assert len(app_module._RL) == 0  # counted in Redis, not the in-process store
+
+
+def test_middleware_falls_back_when_redis_errors(monkeypatch):
+    monkeypatch.delenv("DOCDRIFT_API_KEY", raising=False)
+    _patch_limit(monkeypatch, 2)
+    monkeypatch.setattr(redis_client, "redis_enabled", lambda: True)
+
+    def boom():
+        raise RuntimeError("redis down")
+
+    monkeypatch.setattr(redis_client, "get_redis", boom)
+    app_module._RL.clear()
+    with TestClient(app) as client:
+        codes = [client.get("/metrics").status_code for _ in range(4)]
+    assert 429 in codes                 # still limited via the in-process fallback
+    assert len(app_module._RL) == 1     # fallback path did the counting
