@@ -8,11 +8,14 @@ frequency, guardrail pass rate. ``/metrics`` and the CLI summarizer call this.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.core import pg
 from src.observability.tracing import load_traces_pg, traces_path
+
+logger = logging.getLogger(__name__)
 
 
 def _percentile(values: List[float], pct: float) -> float:
@@ -28,7 +31,10 @@ def _percentile(values: List[float], pct: float) -> float:
 
 def load_traces(path: Optional[Path] = None) -> List[Dict[str, Any]]:
     if path is None and pg.pg_enabled():
-        return load_traces_pg()
+        try:
+            return load_traces_pg()
+        except Exception as e:  # noqa: BLE001 - degrade to file, don't 500 /metrics
+            logger.warning("Postgres trace read failed, using file: %s", e)
     target = path or traces_path()
     if not target.exists():
         return []
