@@ -49,13 +49,33 @@ class RAGEvaluator:
         # makes per-model scores comparable — otherwise two variables move at once.
         self.gen_spec = gen_spec
         self.db_manager = get_vectorstore()
-        # Provider-agnostic LangChain LLM + embeddings for Ragas (the fixed judge).
-        self.eval_llm = llm.eval_llm(temperature=0.0)
-        self.eval_embeddings = llm.eval_embeddings()
+        # The Ragas judge burns LLM credits; skip building it in offline mode.
+        if cfg("evaluation", "offline", default=False):
+            self.eval_llm = self.eval_embeddings = None
+        else:
+            self.eval_llm = llm.eval_llm(temperature=0.0)
+            self.eval_embeddings = llm.eval_embeddings()
 
     def _active_metrics(self) -> list:
         names = cfg("evaluation", "metrics", default=list(METRIC_MAP.keys()))
         return [METRIC_MAP[n] for n in names if n in METRIC_MAP]
+
+    def _evaluate(self, hf_dataset, data: dict):
+        """Score a dataset with Ragas, or lexically when evaluation.offline is set."""
+        if cfg("evaluation", "offline", default=False):
+            from src.evaluation import offline_judge
+            return offline_judge.LexicalResult(offline_judge.lexical_frame(data))
+        runner_config = RunConfig(
+            timeout=cfg("evaluation", "timeout", default=600),
+            max_workers=cfg("evaluation", "max_workers", default=1),
+        )
+        return evaluate(
+            dataset=hf_dataset,
+            metrics=self._active_metrics(),
+            llm=self.eval_llm,
+            embeddings=self.eval_embeddings,
+            run_config=runner_config,
+        )
 
     def generate_rag_answers(self, question: str, contexts: list) -> str:
         context_str = "\n".join(contexts)
@@ -107,18 +127,7 @@ Question: {question}"""
             data_for_eval["reference"].append(ground_truth)
 
         hf_dataset = Dataset.from_dict(data_for_eval)
-        runner_config = RunConfig(
-            timeout=cfg("evaluation", "timeout", default=600),
-            max_workers=cfg("evaluation", "max_workers", default=1),
-        )
-
-        result = evaluate(
-            dataset=hf_dataset,
-            metrics=self._active_metrics(),
-            llm=self.eval_llm,
-            embeddings=self.eval_embeddings,
-            run_config=runner_config,
-        )
+        result = self._evaluate(hf_dataset, data_for_eval)
 
         if export:
             df = result.to_pandas()
@@ -195,17 +204,7 @@ Question: {question}"""
             agent_data["reference"].append(ground_truth)
 
         hf_dataset = Dataset.from_dict(agent_data)
-        runner_config = RunConfig(
-            timeout=cfg("evaluation", "timeout", default=600),
-            max_workers=cfg("evaluation", "max_workers", default=1),
-        )
-        agentic_result = evaluate(
-            dataset=hf_dataset,
-            metrics=self._active_metrics(),
-            llm=self.eval_llm,
-            embeddings=self.eval_embeddings,
-            run_config=runner_config,
-        )
+        agentic_result = self._evaluate(hf_dataset, agent_data)
         agent_df = agentic_result.to_pandas()
         comparison["agentic_rag"] = {
             c: float(agent_df[c].mean()) for c in agent_df.columns if c in METRIC_MAP

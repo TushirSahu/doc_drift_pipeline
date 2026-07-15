@@ -61,6 +61,7 @@ retrieval:
   reranker_model: "BAAI/bge-reranker-base"
 
 evaluation:
+  offline: false            # true = lexical judge (no LLM/credits); rough, for CI/dev
   num_questions: 5
   metrics:
     - faithfulness
