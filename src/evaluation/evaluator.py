@@ -130,9 +130,10 @@ Question: {question}"""
         result = self._evaluate(hf_dataset, data_for_eval)
 
         if export:
+            from src.evaluation.drift import finite_only
             df = result.to_pandas()
             export_csv(df, "latest_eval.csv")
-            scores = {c: float(df[c].mean()) for c in df.columns if c in METRIC_MAP}
+            scores = finite_only({c: float(df[c].mean()) for c in df.columns if c in METRIC_MAP})
             export_json({"scores": scores}, "latest_eval.json")
 
         return result

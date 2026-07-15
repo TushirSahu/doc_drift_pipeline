@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -8,6 +9,15 @@ from typing import Dict
 from src.core.settings import ROOT_DIR, cfg
 
 logger = logging.getLogger(__name__)
+
+
+def finite_only(scores: Dict[str, float]) -> Dict[str, float]:
+    """Drop NaN/inf metrics. A weak judge can NaN a Ragas metric; keeping it would
+    write invalid JSON and silently skew the gate. Skip it instead."""
+    return {
+        k: float(v) for k, v in scores.items()
+        if isinstance(v, (int, float)) and math.isfinite(v)
+    }
 
 METRICS = [
     "faithfulness",
@@ -28,7 +38,7 @@ def save_baseline(scores: Dict[str, float], path: Path | None = None) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "scores": scores,
+        "scores": finite_only(scores),   # never commit NaN into the baseline
     }
     with open(target, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
@@ -51,6 +61,7 @@ def check_drift(
 ) -> tuple[bool, list[str]]:
     regression_threshold = cfg("drift", "regression_threshold", default=0.05)
     faithfulness_threshold = cfg("drift", "faithfulness_threshold", default=0.8)
+    current = finite_only(current)   # a NaN metric is skipped, not silently compared
     reasons: list[str] = []
 
     faith = current.get("faithfulness")

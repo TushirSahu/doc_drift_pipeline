@@ -6,6 +6,7 @@ import sys
 from src.core.logging import configure_logging
 from src.core.settings import ROOT_DIR, cfg
 from src.evaluation import METRICS, RAGEvaluator, SyntheticDataGenerator, enforce_drift_or_exit
+from src.evaluation.drift import finite_only
 from src.ingestion import ingest_all
 
 configure_logging()
@@ -13,7 +14,9 @@ logger = logging.getLogger(__name__)
 
 
 def _collect_scores(df) -> dict:
-    return {m: float(df[m].mean()) for m in METRICS if m in df.columns}
+    # df.mean() skips per-row NaN, but an all-NaN metric (weak judge) still yields
+    # NaN — drop those so they never reach the gate or the metrics files.
+    return finite_only({m: float(df[m].mean()) for m in METRICS if m in df.columns})
 
 
 def main(argv: list[str] | None = None) -> int:
