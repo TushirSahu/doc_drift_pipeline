@@ -24,6 +24,10 @@ class _FakeRedis:
     def ttl(self, key):
         return 42
 
+    def eval(self, script, numkeys, key, arg):
+        # Stand in for the INCR(+EXPIRE) Lua script: only the count matters here.
+        return self.incr(key)
+
 
 def _patch_limit(monkeypatch, value):
     real = app_module.cfg

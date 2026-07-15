@@ -196,15 +196,22 @@ def _inprocess_rate_limited(ip: str, limit: int, now: float):
     return False, 0
 
 
+# INCR + EXPIRE as one atomic step. Two separate commands race: a crash between
+# them leaves a counter with no TTL, so an IP would be throttled forever.
+_RL_LUA = (
+    "local c = redis.call('INCR', KEYS[1]) "
+    "if c == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end "
+    "return c"
+)
+
+
 def _redis_rate_limited(ip: str, limit: int):
     """Per-IP limiter shared across instances via a Redis fixed-window counter.
     Raises on any Redis error so the caller can fall back."""
     r = redis_client.get_redis()
     window = int(time.time() // 60)
     key = f"rl:{ip}:{window}"
-    count = r.incr(key)
-    if count == 1:
-        r.expire(key, 60)  # only the first request in the window sets the TTL
+    count = r.eval(_RL_LUA, 1, key, 60)
     if count > limit:
         ttl = r.ttl(key)
         return True, max(1, ttl if isinstance(ttl, int) and ttl > 0 else 60)
