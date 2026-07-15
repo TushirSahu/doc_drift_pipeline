@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DocDrift — Agentic RAG, grounded & drift-gated</title>
+<meta name="description" content="DocDrift is an LLMOps platform for documentation Q&A: agentic RAG with grounding guardrails, Ragas evaluation, and a CI drift gate." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    /* Black-dominant monochrome — white is the single affirmative accent */
+    --bg:#000000; --panel:#0a0a0a; --panel-2:#070707; --inset:#0d0d0d;
+    --line:#1c1c1c; --line-2:#282828; --line-3:#3a3a3a;
+    --text:#ededed; --muted:#8f8f8f; --faint:#5a5a5a; --ghost:#3a3a3a;
+    --white:#ffffff;
+    --chip:#111111;
+    --radius:14px; --radius-sm:9px;
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono','Cascadia Code',Menlo,Consolas,monospace;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --display:'Space Grotesk',var(--sans);
+    --ease:cubic-bezier(.22,.61,.36,1);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;min-height:100dvh;
+  }
+  .wrap{max-width:1200px;margin:0 auto;padding:26px 22px 48px}
+  .ic{width:15px;height:15px;flex:none;display:inline-block;vertical-align:-2px}
+  ::selection{background:#fff;color:#000}
+
+  /* ── Masthead ───────────────────────────────────────────── */
+  .top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+  .brand{display:flex;align-items:center;gap:13px;min-width:0}
+  .mark{width:42px;height:42px;border-radius:12px;flex:none;display:grid;place-items:center;
+    color:#000;background:var(--white);border:1px solid var(--white)}
+  .mark .ic{width:23px;height:23px}
+  .brand .name{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:-.03em;line-height:1;color:#fff}
+  .brand .sub{color:var(--muted);font-size:12.5px;margin-top:5px;letter-spacing:.1px}
+  .spacer{flex:1}
+  .status{display:inline-flex;align-items:center;gap:8px;padding:8px 13px;border-radius:999px;cursor:pointer;
+    font-size:12px;font-weight:600;border:1px solid var(--line-2);background:var(--panel);color:var(--muted);
+    font-family:inherit;transition:.15s var(--ease)}
+  .status:hover{border-color:var(--line-3);color:var(--text)}
+  .status:focus-visible{outline:2px solid var(--white);outline-offset:2px}
+  .status .dot{width:7px;height:7px;border-radius:50%;background:var(--faint)}
+  .status.live{color:#fff;border-color:var(--line-3)}
+  .status.live .dot{background:var(--white);box-shadow:0 0 0 3px rgba(255,255,255,.08),0 0 10px rgba(255,255,255,.5);animation:pulse 2.6s var(--ease) infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .ghostlink{display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border-radius:999px;
+    font-size:12.5px;font-weight:600;color:var(--muted);text-decoration:none;
+    border:1px solid var(--line-2);background:var(--panel);transition:.15s var(--ease)}
+  .ghostlink:hover{color:#fff;border-color:var(--line-3)}
+  .ghostlink:focus-visible{outline:2px solid var(--white);outline-offset:2px}
+
+  /* ── Pipeline spine (signature: numbered 01–05) ─────────── */
+  .pipe{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin:0 0 22px;
+    border:1px solid var(--line);border-radius:14px;background:var(--panel-2);overflow:hidden}
+  .stage{display:flex;align-items:center;gap:11px;padding:15px 18px;flex:1;min-width:150px;position:relative}
+  .stage + .stage{border-left:1px solid var(--line)}
+  .stage .num{font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:-.02em;color:var(--ghost);
+    font-feature-settings:"tnum"}
+  .stage .txt{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;font-weight:600}
+  .stage .txt .ic{color:var(--faint)}
+  .stage.last{background:var(--white)}
+  .stage.last .num{color:#000}
+  .stage.last .txt{color:#000}
+  .stage.last .txt .ic{color:#000}
+  @media(max-width:760px){
+    .stage{flex:1 1 40%;min-width:0}
+    .stage:nth-child(odd){border-left:none}
+    .stage{border-top:1px solid var(--line)}
+    .stage:nth-child(-n+2){border-top:none}
+  }
+
+  /* ── Layout ─────────────────────────────────────────────── */
+  .grid{display:grid;grid-template-columns:1.55fr 1fr;gap:18px}
+  @media(max-width:940px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+  .card h3{margin:0 0 14px;font-size:10.5px;text-transform:uppercase;letter-spacing:1.6px;color:var(--faint);
+    font-weight:700;display:flex;align-items:center;gap:8px}
+  .card h3 .ic{color:var(--muted);width:13px;height:13px}
+  .card h3.mt{margin-top:24px}
+
+  /* Knowledge base */
+  .kb{display:flex;flex-wrap:wrap;gap:8px}
+  .kbdoc{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11.5px;
+    color:var(--text);background:var(--chip);border:1px solid var(--line-2);border-radius:8px;padding:7px 11px}
+  .kbdoc .ic{color:var(--faint)}
+  .kbdoc .tag{font-family:var(--sans);font-size:9px;font-weight:700;letter-spacing:.6px;
+    padding:2px 6px;border-radius:5px;text-transform:uppercase;color:#000;background:var(--muted)}
+
+  /* Example chips */
+  .examples{margin-bottom:16px}
+  .exgroup{margin-bottom:6px}
+  .exlabel{font-size:9.5px;text-transform:uppercase;letter-spacing:1.4px;color:var(--faint);margin:12px 0 8px;font-weight:700}
+  .exrow{display:flex;flex-wrap:wrap;gap:8px}
+  .ex{cursor:pointer;font-size:12.5px;padding:8px 13px;border-radius:999px;border:1px solid var(--line-2);
+    background:var(--panel-2);color:var(--muted);transition:.18s var(--ease);font-family:inherit}
+  .ex:hover{color:var(--text);border-color:var(--line-3);transform:translateY(-1px)}
+  .ex.active{color:#000;background:var(--white);border-color:var(--white);font-weight:600}
+  .ex:focus-visible{outline:2px solid var(--white);outline-offset:2px}
+
+  /* Chat thread */
+  .msg{margin-bottom:14px;animation:rise .32s var(--ease) both}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .q{display:flex;justify-content:flex-end}
+  .q .bubble{background:var(--chip);border:1px solid var(--line-2);
+    padding:11px 15px;border-radius:16px 16px 5px 16px;max-width:82%;font-size:14.5px;color:var(--text)}
+  .a .bubble{background:var(--panel-2);border:1px solid var(--line);border-radius:16px 16px 16px 5px;padding:17px;max-width:94%}
+  .answer{font-size:15px;line-height:1.65;color:var(--text)}
+  .answer b{color:#fff;font-weight:600}
+  .cite{color:#fff;font-weight:600;text-decoration:underline;text-decoration-color:var(--line-3);text-underline-offset:3px}
+
+  .badges{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;
+    padding:5px 10px;border-radius:8px;border:1px solid var(--line-2);color:var(--muted);background:var(--panel-2)}
+  .badge .ic{width:13px;height:13px}
+  .badge.ok{color:#fff;border-color:var(--line-3);background:var(--chip)}
+  .badge.ok .ic{color:#fff}
+  .badge.warn{color:var(--text);border-style:dashed;border-color:var(--line-3);background:transparent}
+  .badge.warn .ic{color:var(--muted)}
+  .badge.neutral{color:var(--muted);background:var(--chip);border-color:var(--line-2)}
+
+  .srcchips{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+  .src{font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--inset);
+    border:1px solid var(--line-2);padding:4px 9px;border-radius:7px}
+
+  details.trace{margin-top:14px;border-top:1px dashed var(--line-2);padding-top:12px}
+  details.trace summary{cursor:pointer;font-size:12.5px;color:var(--muted);user-select:none;
+    display:flex;align-items:center;gap:7px;list-style:none;transition:color .15s}
+  details.trace summary::-webkit-details-marker{display:none}
+  details.trace summary:hover{color:var(--text)}
+  details.trace summary .chev{transition:transform .2s var(--ease);color:var(--faint)}
+  details.trace[open] summary .chev{transform:rotate(90deg)}
+  .step{display:flex;gap:11px;align-items:flex-start;margin-top:11px;font-size:12.5px}
+  .step .n{flex:none;width:22px;height:22px;border-radius:7px;background:var(--chip);border:1px solid var(--line-3);
+    display:grid;place-items:center;color:#fff;font-weight:700;font-size:11px;font-family:var(--mono)}
+  .step code{font-family:var(--mono);color:var(--text);font-size:12px}
+  .step .res{color:var(--faint);margin-top:3px;font-family:var(--mono);font-size:11.5px}
+
+  .fbrow{display:flex;align-items:center;gap:9px;margin-top:16px;padding-top:13px;border-top:1px solid var(--line)}
+  .fbrow .lbl{font-size:12px;color:var(--faint);margin-right:auto}
+  .fb{cursor:pointer;display:inline-grid;place-items:center;border:1px solid var(--line-2);background:var(--panel-2);
+    color:var(--muted);border-radius:9px;width:34px;height:32px;transition:.15s var(--ease)}
+  .fb:hover{color:var(--text);border-color:var(--line-3)}
+  .fb:focus-visible{outline:2px solid var(--white);outline-offset:2px}
+  .fb.up.on{color:#000;border-color:var(--white);background:var(--white)}
+  .fb.down.on{color:var(--text);border-color:var(--line-3);background:var(--chip)}
+  .fbnote{font-size:12px;color:var(--muted);margin-top:10px;display:none;line-height:1.5}
+  .fbnote.show{display:block}
+
+  .inputbar{display:flex;gap:9px;margin-top:16px}
+  .inputbar input{flex:1;background:var(--inset);border:1px solid var(--line-2);border-radius:11px;
+    padding:12px 14px;color:var(--text);font-size:14px;font-family:var(--sans);transition:border-color .15s,box-shadow .15s}
+  .inputbar input::placeholder{color:var(--faint)}
+  .inputbar input:focus{outline:none;border-color:var(--line-3);box-shadow:0 0 0 3px rgba(255,255,255,.06)}
+  .inputbar button{display:inline-flex;align-items:center;gap:7px;background:var(--white);
+    border:1px solid var(--white);color:#000;font-weight:700;border-radius:11px;padding:0 18px;cursor:pointer;font-size:14px;transition:.15s var(--ease)}
+  .inputbar button:hover{background:#e2e2e2}
+  .inputbar button:active{transform:translateY(1px)}
+  .inputbar button:focus-visible{outline:2px solid var(--white);outline-offset:2px}
+
+  /* Metrics */
+  .kpis{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:20px}
+  .kpi{background:var(--panel-2);border:1px solid var(--line-2);border-radius:12px;padding:13px 14px;transition:border-color .15s,transform .15s var(--ease)}
+  .kpi:hover{border-color:var(--line-3);transform:translateY(-1px)}
+  .kpi .khd{display:flex;align-items:center;gap:6px;color:var(--faint);font-size:11px;margin-bottom:7px}
+  .kpi .khd .ic{width:13px;height:13px}
+  .kpi .v{font-family:var(--display);font-size:23px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--text)}
+  .kpi .v small{font-family:var(--sans);font-size:12px;color:var(--faint);font-weight:500}
+  .kpi.hl .v{color:#fff}
+
+  .metric{margin-bottom:14px}
+  .metric .row{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;margin-bottom:6px}
+  .metric .row .nm{color:var(--muted)}
+  .metric .row b{font-weight:700;font-variant-numeric:tabular-nums;color:var(--text)}
+  .metric .row .base{color:var(--faint);font-weight:500;font-size:11.5px;margin-left:4px}
+  .metric .delta{color:var(--muted);font-weight:600;font-size:11px;margin-left:6px}
+  .bar{position:relative;height:8px;border-radius:999px;background:var(--inset);overflow:hidden;border:1px solid var(--line-2)}
+  .bar > span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#7a7a7a,#ffffff)}
+  .bar > i.basemark{position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--faint);opacity:.8}
+
+  .gate{display:flex;align-items:center;gap:13px;margin-top:16px;padding:15px;border-radius:14px;
+    background:var(--panel-2);border:1px solid var(--line-3)}
+  .gate .gi{width:38px;height:38px;flex:none;border-radius:11px;display:grid;place-items:center;color:#000;
+    background:var(--white);border:1px solid var(--white)}
+  .gate .gi .ic{width:20px;height:20px}
+  .gate .big{font-weight:700;color:#fff;font-size:14.5px}
+  .gate .sub{font-size:12px;color:var(--muted);margin-top:2px}
+  .gate .sub code{font-family:var(--mono);color:var(--text);font-size:11.5px}
+
+  /* Model leaderboard */
+  .lbsub{color:var(--faint);font-size:12.5px;margin:-4px 0 16px;line-height:1.65}
+  .lbsub b{color:#fff;font-weight:600}
+  .lbsub code{font-family:var(--mono);color:var(--muted);background:var(--inset);padding:1px 6px;border-radius:6px;border:1px solid var(--line-2);font-size:11px}
+  .rerun-row{display:flex;align-items:center;gap:10px;margin:0 0 14px}
+  .rerun{background:var(--inset);color:#fff;border:1px solid var(--line-3);border-radius:8px;padding:6px 12px;font:inherit;font-size:12px;cursor:pointer;transition:background .15s}
+  .rerun:hover:not(:disabled){background:var(--chip)}
+  .rerun:disabled{opacity:.5;cursor:not-allowed}
+  .rerun-msg{color:var(--muted);font-size:11.5px}
+  .rerun-msg.err{color:#e5a0a0}
+  .models-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  @media(max-width:720px){.models-grid{grid-template-columns:1fr}}
+  .model{background:var(--panel-2);border:1px solid var(--line-2);border-radius:12px;padding:15px 16px;
+    transition:border-color .15s,transform .15s var(--ease)}
+  .model:hover{border-color:var(--line-3);transform:translateY(-1px)}
+  .model.champ{border-color:var(--line-3);background:var(--chip)}
+  .model .mtop{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:12px}
+  .model .mname{font-family:var(--display);font-weight:600;font-size:15px;color:var(--text);letter-spacing:-.01em}
+  .model.champ .mname{color:#fff}
+  .mprov{font-family:var(--mono);font-size:10px;color:var(--faint);background:var(--inset);
+    border:1px solid var(--line-2);padding:3px 7px;border-radius:6px;max-width:100%;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .mserve{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;
+    letter-spacing:.6px;text-transform:uppercase;color:#000;background:var(--white);padding:4px 9px;border-radius:999px}
+  .mserve .ic{width:11px;height:11px}
+  .mscore{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:6px}
+  .mscore .nm{color:var(--muted)}
+  .mscore b{font-variant-numeric:tabular-nums;color:var(--text);font-weight:700}
+  .model.champ .mscore b{color:#fff}
+  .mmetrics{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .mm{font-family:var(--mono);font-size:10.5px;color:var(--muted);background:var(--inset);
+    border:1px solid var(--line-2);padding:3px 8px;border-radius:6px}
+  .mm b{color:var(--text);font-weight:500}
+  .model.err{opacity:.7}
+  .model.err .mfail{color:var(--muted);font-size:11.5px;font-family:var(--mono);display:flex;align-items:center;gap:7px}
+  .model.err .mfail .ic{color:var(--faint)}
+
+  .foot{margin-top:22px;text-align:center;color:var(--faint);font-size:12.5px;line-height:1.7}
+  .foot code{font-family:var(--mono);color:var(--muted);background:var(--inset);padding:2px 6px;border-radius:6px;border:1px solid var(--line-2)}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important;transition:none !important;scroll-behavior:auto !important}
+  }
+  @media(max-width:520px){
+    .wrap{padding:20px 15px 40px}
+    .kpis{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- Masthead -->
+  <header class="top">
+    <div class="brand">
+      <div class="mark" aria-hidden="true">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5 7 5-14L17 12h4"/></svg>
+      </div>
+      <div>
+        <div class="name">DocDrift</div>
+        <div class="sub">Agentic RAG over your docs — grounded, evaluated, drift-gated</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <a class="ghostlink" href="index.html">← Home</a>
+    <button class="status" id="connDot" onclick="connect()" title="Retry connection to the live API">
+      <span class="dot"></span> Demo data
+    </button>
+    <a class="ghostlink" href="https://github.com/TushirSahu/doc_drift_pipeline" target="_blank" rel="noopener">
+      <svg class="ic" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.3 9.3 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9 0 1.37-.01 2.48-.01 2.82 0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>
+      GitHub
+    </a>
+  </header>
+
+  <!-- Pipeline spine -->
+  <nav class="pipe" aria-label="Pipeline">
+    <div class="stage"><span class="num">01</span><span class="txt"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> Ingest</span></div>
+    <div class="stage"><span class="num">02</span><span class="txt"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg> Retrieve</span></div>
+    <div class="stage"><span class="num">03</span><span class="txt"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9.94 14.32A2 2 0 0 0 8.68 15.6L8 18l-.68-2.4a2 2 0 0 0-1.26-1.28L4 13.6l2.06-.7A2 2 0 0 0 7.32 11.6L8 9.2l.68 2.4a2 2 0 0 0 1.26 1.28L12 13.6zM18 5l.5 1.8L20 7.3l-1.5.5L18 9.6l-.5-1.8L16 7.3l1.5-.5z"/></svg> Answer</span></div>
+    <div class="stage"><span class="num">04</span><span class="txt"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Evaluate</span></div>
+    <div class="stage last"><span class="num">05</span><span class="txt"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg> Drift gate</span></div>
+  </nav>
+
+  <div class="grid">
+    <!-- LEFT: playground -->
+    <section class="card">
+      <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> Knowledge base</h3>
+      <div class="kb" id="kb"></div>
+
+      <h3 class="mt"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg> Try a question</h3>
+      <div class="examples" id="examples"></div>
+
+      <div id="thread"></div>
+
+      <div class="inputbar">
+        <input id="qinput" placeholder="Ask a question about your documentation…" aria-label="Ask a question" />
+        <button onclick="ask()">
+          Ask
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </button>
+      </div>
+    </section>
+
+    <!-- RIGHT: observability -->
+    <section class="card">
+      <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Live metrics</h3>
+      <div class="kpis">
+        <div class="kpi">
+          <div class="khd"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> p50 latency</div>
+          <div class="v">182<small> ms</small></div>
+        </div>
+        <div class="kpi">
+          <div class="khd"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> p95 latency</div>
+          <div class="v">410<small> ms</small></div>
+        </div>
+        <div class="kpi">
+          <div class="khd"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> error rate</div>
+          <div class="v">0.4<small> %</small></div>
+        </div>
+        <div class="kpi hl">
+          <div class="khd"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg> grounding pass-rate</div>
+          <div class="v">96<small> %</small></div>
+        </div>
+      </div>
+
+      <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg> Quality gate vs baseline</h3>
+      <div id="metrics"></div>
+
+      <div class="gate">
+        <div class="gi"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+        <div>
+          <div class="big">No drift detected</div>
+          <div class="sub">All Ragas metrics within threshold of <code>baseline.json</code></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Model leaderboard -->
+  <section class="card" style="margin-top:18px">
+    <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg> Model leaderboard <span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--faint);text-transform:none;letter-spacing:0">Ragas · higher is better</span></h3>
+    <div class="lbsub" id="lbsub"></div>
+    <div class="rerun-row">
+      <button id="rerunBtn" class="rerun" onclick="rerunBenchmark()" title="Re-run the multi-LLM benchmark (live API only)">↻ Re-run benchmark</button>
+      <span id="rerunMsg" class="rerun-msg"></span>
+    </div>
+    <div class="models-grid" id="models"></div>
+  </section>
+
+  <div class="foot">
+    Runs on bundled sample data instantly · auto-connects to the live DocDrift API
+    (<code>uvicorn src.api.app:app</code>) when reachable — then answers, traces, metrics, and feedback are real.
+  </div>
+</div>
+
+<script>
+// ── Inline icon set (Lucide-style, stroke = currentColor) ────────────────
+const ICONS = {
+  file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  alert:'<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  undo:'<path d="M9 14 4 9l5-5"/><path d="M4 9h11a4 4 0 0 1 0 8h-2"/>',
+  gear:'<path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  up:'<path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88z"/>',
+  down:'<path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88z"/>',
+  chevron:'<path d="m9 18 6-6-6-6"/>',
+  shield:'<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+};
+function ic(name, cls){
+  return `<svg class="ic${cls?' '+cls:''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||''}</svg>`;
+}
+
+const SAMPLES = [
+  {
+    doc: "auth",
+    q: "What auth method does v2 use, and how long is an admin session in minutes?",
+    answer: `Auth Service v2.0 uses <b>OAuth2 with JWT tokens</b> instead of session cookies. Admin users have a maximum session of 12 hours, which is <b>720 minutes</b>. <span class="cite">[Source: auth_service_v2.md]</span>`,
+    grounding: 0.94, cited: true, steps: 2,
+    sources: ["auth_service_v2.md · chunk 1", "auth_service_v2.md · chunk 2"],
+    trace: [
+      {tool:"search_docs", args:`"admin session length auth v2"`, res:"3 chunks · top score 0.88"},
+      {tool:"calculator", args:"12 * 60", res:"720"},
+    ],
+  },
+  {
+    doc: "auth",
+    q: "How do I refresh an access token?",
+    answer: `Send a request to the <b>/api/v2/auth/refresh</b> endpoint. Tokens expire after 15 minutes by default, so refresh before then to stay authenticated. <span class="cite">[Source: auth_service_v2.md]</span>`,
+    grounding: 0.89, cited: true, steps: 1,
+    sources: ["auth_service_v2.md · chunk 1"],
+    trace: [ {tool:"search_docs", args:`"refresh access token endpoint"`, res:"2 chunks · top score 0.91"} ],
+  },
+  {
+    doc: "payment",
+    q: "How do I process a payment and what fields are required?",
+    answer: `Send a <b>POST</b> to <b>/payments/process</b> with a JSON body containing <b>amount</b>, <b>currency</b>, <b>payment_method</b>, <b>card_token</b>, and <b>customer_id</b>. A successful call returns a <b>transaction_id</b> and a <b>success</b> status. <span class="cite">[Source: doc_payment_v2.md]</span>`,
+    grounding: 0.93, cited: true, steps: 1,
+    sources: ["doc_payment_v2.md · Process Payment", "doc_payment_v2.md · chunk 2"],
+    trace: [ {tool:"search_docs", args:`"process payment endpoint request body"`, res:"2 chunks · top score 0.90"} ],
+  },
+  {
+    doc: "payment",
+    q: "How do I authenticate requests to the Payment API?",
+    answer: `All requests require <b>Bearer token</b> authentication in the Authorization header — <b>Authorization: Bearer YOUR_API_KEY</b>. A missing or invalid key returns <b>401 Unauthorized</b>. <span class="cite">[Source: doc_payment_v2.md]</span>`,
+    grounding: 0.91, cited: true, steps: 1,
+    sources: ["doc_payment_v2.md · Authentication", "doc_payment_v2.md · Error Codes"],
+    trace: [ {tool:"search_docs", args:`"payment API authentication header bearer"`, res:"2 chunks · top score 0.94"} ],
+  },
+  {
+    doc: "payment",
+    q: "Does the payment API support refunds in euros?",
+    answer: `I don't have enough information in the documentation to answer that. The payment docs describe payment processing and transaction endpoints, but don't mention refunds or currency-specific behavior.`,
+    grounding: 0.0, cited: false, steps: 1, idk:true,
+    sources: ["doc_payment_v2.md · chunk 3"],
+    trace: [ {tool:"search_docs", args:`"refund euros currency"`, res:"1 chunk · top score 0.41 (low)"} ],
+  },
+];
+
+const METRICS = [
+  {name:"Faithfulness", val:0.99, base:0.98},
+  {name:"Answer relevancy", val:0.97, base:0.96},
+  {name:"Context precision", val:1.00, base:1.00},
+  {name:"Context recall", val:0.95, base:0.94},
+];
+
+// Prettify a raw metric key when no explicit label exists:
+// "answer_correctness" -> "Answer correctness". Keeps the panel dynamic — a new
+// Ragas metric shows up with a readable name without editing this file.
+function prettify(k){ const s=String(k).replace(/_/g,' '); return s.charAt(0).toUpperCase()+s.slice(1); }
+
+// `items` are {name, val, base?}. Defaults to the static demo array (offline);
+// loadEval() passes items built from live /eval data.
+function renderMetrics(items){
+  const rows = items || METRICS;
+  document.getElementById('metrics').innerHTML = rows.map(m=>{
+    const hasBase = typeof m.base === 'number';
+    const d = hasBase ? Math.round((m.val - m.base)*100) : 0;
+    const delta = d>0 ? `<span class="delta">▲ +${d}</span>` : (d<0 ? `<span class="delta">▼ ${d}</span>` : '');
+    const base = hasBase ? `<span class="base">· base ${(m.base*100).toFixed(0)}%</span>` : '';
+    const mark = hasBase ? `<i class="basemark" style="left:${m.base*100}%"></i>` : '';
+    return `
+    <div class="metric">
+      <div class="row"><span class="nm">${esc(m.name)}</span>
+        <b>${(m.val*100).toFixed(0)}%${base}${delta}</b></div>
+      <div class="bar"><span style="width:${m.val*100}%"></span>${mark}</div>
+    </div>`;
+  }).join('');
+}
+
+// Build the quality panel from live /eval scores; falls back to demo array.
+async function loadEval(){
+  try{
+    const r = await fetch(LIVE.base+'/eval',{headers:headers()});
+    if(!r.ok) return;
+    const d = await r.json();
+    const scores = d.scores || {};
+    const base = d.baseline || {};
+    const items = Object.keys(scores).map(k=>({
+      name: METRIC_LABELS[k] || prettify(k),
+      val: scores[k],
+      base: typeof base[k] === 'number' ? base[k] : undefined,
+    }));
+    if(items.length) renderMetrics(items);
+  }catch(e){}
+}
+
+// ── Model leaderboard ────────────────────────────────────────────────────
+// Demo payload mirrors GET /models. Scores are illustrative until the real
+// benchmark runs (pipeline.py --compare-models). Live data replaces this.
+const METRIC_LABELS = {
+  faithfulness:"Faithful", answer_relevancy:"Relevancy", context_precision:"Precision",
+  context_recall:"Recall", answer_correctness:"Correctness",
+};
+const DEMO_MODELS = {
+  champion:"qwen2.5-7b-hf", primary_metric:"answer_correctness", updated_at:"demo",
+  models:{
+    "qwen2.5-7b-hf":   {faithfulness:0.96, answer_relevancy:0.93, context_precision:0.99, context_recall:0.90, answer_correctness:0.81},
+    "llama-3.1-8b-hf": {faithfulness:0.94, answer_relevancy:0.91, context_precision:0.99, context_recall:0.88, answer_correctness:0.72},
+    "llama3.2-3b-local":{faithfulness:0.89, answer_relevancy:0.85, context_precision:0.97, context_recall:0.82, answer_correctness:0.63},
+  },
+  specs:{
+    "qwen2.5-7b-hf":   {provider:"openai", model:"Qwen/Qwen2.5-7B-Instruct:cheapest"},
+    "llama-3.1-8b-hf": {provider:"openai", model:"meta-llama/Llama-3.1-8B-Instruct:cheapest"},
+    "llama3.2-3b-local":{provider:"ollama", model:"llama3.2:3b"},
+  },
+};
+
+function shortTime(iso){ try{ return new Date(iso).toLocaleString(); }catch(e){ return iso; } }
+function provLabel(spec){
+  if(!spec) return '';
+  const who = spec.provider==='ollama' ? 'ollama' : 'hf/openai';
+  const id  = spec.provider==='ollama' ? spec.model : String(spec.model||'').split('/').pop();
+  return `<span class="mprov" title="${esc(spec.model)}">${who} · ${esc(id)}</span>`;
+}
+
+function renderModels(data){
+  const primary = data.primary_metric || 'answer_correctness';
+  const specs = data.specs || {};
+  const entries = Object.entries(data.models || {});
+  // Successful models first, ranked by the primary metric; errored models last.
+  entries.sort((a,b)=>{
+    const av = a[1] && !a[1].error ? (a[1][primary] ?? -1) : -2;
+    const bv = b[1] && !b[1].error ? (b[1][primary] ?? -1) : -2;
+    return bv - av;
+  });
+
+  const isDemo = data.updated_at === 'demo' || !LIVE.on;
+  const when = (data.updated_at && !isDemo) ? ` · updated ${shortTime(data.updated_at)}` : '';
+  const primLabel = (METRIC_LABELS[primary] || prettify(primary)).toLowerCase();
+  const sub = document.getElementById('lbsub');
+  if(data.champion){
+    sub.innerHTML = `Answers are served by <b>${esc(data.champion)}</b> 👑 — the model with the best `
+      + `${esc(primLabel)} score${when}. `
+      + (isDemo ? `<span style="color:var(--faint)">Sample scores — live numbers appear once the benchmark has run.</span>` : '');
+  } else {
+    sub.innerHTML = `Scores will appear here automatically after the next benchmark run.`;
+  }
+
+  document.getElementById('models').innerHTML = entries.map(([name, sc])=>{
+    const prov = provLabel(specs[name]);
+    const champ = name === data.champion;
+    if(sc && sc.error){
+      return `<div class="model err"><div class="mtop"><span class="mname">${esc(name)}</span>${prov}</div>
+        <div class="mfail">${ic('alert')} ${esc(sc.error)}</div></div>`;
+    }
+    const pv = sc[primary] ?? 0;
+    const serve = champ ? `<span class="mserve">${ic('shield')} Serving</span>` : '';
+    // Iterate the model's own metric keys, not a fixed list — a new Ragas
+    // metric shows automatically. METRIC_LABELS is just an optional short label.
+    const others = Object.keys(sc)
+      .filter(m=>m!==primary && typeof sc[m]==='number')
+      .map(m=>`<span class="mm">${esc(METRIC_LABELS[m]||prettify(m))} <b>${Math.round(sc[m]*100)}</b></span>`).join('');
+    return `<div class="model${champ?' champ':''}">
+      <div class="mtop"><span class="mname">${champ?'👑 ':''}${esc(name)}</span>${prov}${serve}</div>
+      <div class="mscore"><span class="nm">${esc(METRIC_LABELS[primary]||prettify(primary))}</span><b>${(pv*100).toFixed(0)}%</b></div>
+      <div class="bar"><span style="width:${(pv*100).toFixed(1)}%"></span></div>
+      <div class="mmetrics">${others}</div>
+    </div>`;
+  }).join('');
+}
+
+async function loadModels(){
+  try{
+    const r = await fetch(LIVE.base+'/models',{headers:headers()});
+    if(!r.ok) return;
+    const d = await r.json();
+    if(d && d.models && Object.keys(d.models).length) renderModels(d);
+  }catch(e){}
+}
+
+// Auto-refresh the board while connected. The benchmark writes model_scores.json
+// on its own cadence (manual run / daily CI), so a light 30s poll keeps the page
+// current without a reload. One timer only; it skips work when the tab is hidden.
+let _modelsTimer = null;
+function startModelsAutoRefresh(){
+  if(_modelsTimer) return;
+  _modelsTimer = setInterval(()=>{
+    if(LIVE.on && document.visibilityState === 'visible') loadModels();
+  }, 30000);
+}
+document.addEventListener('visibilitychange', ()=>{
+  // Pull once immediately when the tab comes back so it never looks stale.
+  if(LIVE.on && document.visibilityState === 'visible') loadModels();
+});
+
+// ── Re-run benchmark ─────────────────────────────────────────────────────
+// POST /models/benchmark starts a background --compare-models run; poll the
+// status endpoint until it finishes, then refresh the board. Needs the live API
+// and api.allow_benchmark_trigger enabled (else the endpoint returns 403).
+let _benchPoll = null;
+function setRerunMsg(text, isErr){
+  const el = document.getElementById('rerunMsg');
+  el.textContent = text || '';
+  el.classList.toggle('err', !!isErr);
+}
+function syncRerunButton(){
+  const btn = document.getElementById('rerunBtn');
+  if(!btn) return;
+  const running = !!_benchPoll;
+  btn.disabled = !LIVE.on || running;
+  if(!LIVE.on) setRerunMsg('Connect to the live API to re-run.');
+}
+async function pollBenchmark(){
+  try{
+    const r = await fetch(LIVE.base+'/models/benchmark/status',{headers:headers()});
+    if(!r.ok) return;
+    const s = await r.json();
+    if(s.state === 'running'){ setRerunMsg('Benchmark running…'); return; }
+    // Terminal state — stop polling, refresh the board.
+    clearInterval(_benchPoll); _benchPoll = null;
+    syncRerunButton();
+    if(s.state === 'done'){ setRerunMsg('Done — board updated.'); loadModels(); loadEval(); }
+    else setRerunMsg(s.error || 'Benchmark failed.', true);
+  }catch(e){}
+}
+async function rerunBenchmark(){
+  if(!LIVE.on || _benchPoll) return;
+  setRerunMsg('Starting…');
+  try{
+    const r = await fetch(LIVE.base+'/models/benchmark',{method:'POST',headers:headers()});
+    if(r.status === 403){ setRerunMsg('Disabled on this server — run pipeline.py --compare-models locally.', true); return; }
+    if(r.status === 409){ setRerunMsg('A benchmark is already running.'); }
+    else if(!r.ok){ setRerunMsg('Could not start (HTTP '+r.status+').', true); return; }
+    _benchPoll = setInterval(pollBenchmark, 3000);
+    syncRerunButton();
+    pollBenchmark();
+  }catch(e){ setRerunMsg('Could not reach the API.', true); }
+}
+
+const DOC_NAME  = { auth:"auth_service_v2.md", payment:"doc_payment_v2.md" };
+const DOC_LABEL = { auth:"Auth Service", payment:"Payment API" };
+
+function trunc(q){ return q.length>46 ? q.slice(0,44)+'…' : q; }
+
+function renderExamples(){
+  const groups = {};
+  SAMPLES.forEach((s,i)=>{ (groups[s.doc] = groups[s.doc] || []).push({s,i}); });
+  document.getElementById('examples').innerHTML = ['auth','payment']
+    .filter(d=>groups[d])
+    .map(d=>`
+      <div class="exgroup">
+        <div class="exlabel">${DOC_LABEL[d]}</div>
+        <div class="exrow">${groups[d].map(({s,i})=>
+          `<button class="ex${i===0?' active':''}" onclick="showSample(${i})">${trunc(s.q)}</button>`).join('')}</div>
+      </div>`).join('');
+}
+
+// Knowledge base: which docs are loaded. Offline = the docs the samples cover;
+// live = the real ingested set from GET /sources.
+function renderKB(docs){
+  document.getElementById('kb').innerHTML = docs.map(d=>{
+    const name = d.name || d;
+    const kind = d.doc || (name.includes('payment') ? 'payment' : (name.includes('auth') ? 'auth' : ''));
+    const tag = kind ? `<span class="tag">${kind}</span>` : '';
+    return `<span class="kbdoc">${ic('file')} ${name}${tag}</span>`;
+  }).join('');
+}
+
+function defaultKB(){
+  const seen = [...new Set(SAMPLES.map(s=>s.doc))];
+  renderKB(seen.map(d=>({name:DOC_NAME[d], doc:d})));
+}
+
+async function loadSources(){
+  try{
+    const r = await fetch(LIVE.base+'/sources',{headers:headers()});
+    if(!r.ok) return;
+    const docs = (await r.json()).documents || [];
+    if(docs.length) renderKB(docs);
+  }catch(e){}
+}
+
+function renderAnswer(s){
+  const groundBadge = s.idk
+    ? `<span class="badge neutral">${ic('undo')} Abstained — not in docs</span>`
+    : (s.grounding>=0.5
+        ? `<span class="badge ok">${ic('shield')} Grounded ${s.grounding.toFixed(2)}</span>`
+        : `<span class="badge warn">${ic('alert')} Low grounding ${s.grounding.toFixed(2)}</span>`);
+  const citeBadge = s.cited
+    ? `<span class="badge ok">${ic('check')} Cited</span>`
+    : `<span class="badge warn">${ic('alert')} No citation</span>`;
+  const stepBadge = `<span class="badge neutral">${ic('gear')} ${s.steps} step${s.steps>1?'s':''}</span>`;
+
+  const steps = s.trace.map((t,i)=>`
+    <div class="step"><div class="n">${i+1}</div>
+      <div><code>${t.tool}(${t.args})</code><div class="res">→ ${t.res}</div></div>
+    </div>`).join('');
+
+  const srcs = s.sources.map(x=>`<span class="src">${x}</span>`).join('');
+
+  document.getElementById('thread').innerHTML = `
+    <div class="msg q"><div class="bubble">${s.q}</div></div>
+    <div class="msg a"><div class="bubble">
+      <div class="answer">${s.answer}</div>
+      <div class="badges">${groundBadge}${citeBadge}${stepBadge}</div>
+      <div class="srcchips">${srcs}</div>
+      <details class="trace"><summary>${ic('chevron','chev')} Agent trace (${s.trace.length} tool call${s.trace.length>1?'s':''})</summary>${steps}</details>
+      <div class="fbrow">
+        <span class="lbl">Was this answer helpful?</span>
+        <button class="fb up" onclick="vote(this,'up')" aria-label="Helpful">${ic('up')}</button>
+        <button class="fb down" onclick="vote(this,'down')" aria-label="Not helpful">${ic('down')}</button>
+      </div>
+      <div class="fbnote" id="fbnote"></div>
+    </div></div>`;
+}
+
+// ---------- live API state ----------
+// Backend URL lives here (not shown in the UI). Override at runtime with ?api=…&key=…
+const CONFIG = { apiBase: "https://tushir-doc-drift.hf.space" };
+const LIVE = { on:false, base:'', key:'' };
+
+function _qp(k){ return new URLSearchParams(location.search).get(k); }
+function resolveBase(){ return (_qp('api') || localStorage.getItem('dd_base') || CONFIG.apiBase || 'http://localhost:8000').replace(/\/+$/,''); }
+function resolveKey(){ return _qp('key') || localStorage.getItem('dd_key') || ''; }
+
+let currentQA = { question:SAMPLES[0].q, answer:SAMPLES[0].answer };
+
+function headers(){ const h={'Content-Type':'application/json'}; if(LIVE.key) h['X-API-Key']=LIVE.key; return h; }
+function esc(s){ return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+function setStatus(state){
+  // state: true = live, false = demo, null = connecting
+  const el = document.getElementById('connDot');
+  LIVE.on = state === true;
+  el.classList.toggle('live', state === true);
+  const label = state === null ? 'Connecting…' : (state ? 'Live API' : 'Demo data');
+  el.innerHTML = `<span class="dot"></span> ${label}`;
+  syncRerunButton();
+}
+
+async function connect(){
+  LIVE.base = resolveBase();
+  LIVE.key  = resolveKey();
+  setStatus(null);
+  try{ const r = await fetch(LIVE.base+'/health'); setStatus(r.ok); if(r.ok){ loadMetrics(); loadSources(); loadModels(); loadEval(); startModelsAutoRefresh(); } }
+  catch(e){ setStatus(false); }
+}
+
+// clicking an example chip updates the active feedback target too
+function showSample(i){
+  document.querySelectorAll('.ex').forEach((e,j)=>e.classList.toggle('active',j===i));
+  currentQA = { question:SAMPLES[i].q, answer:SAMPLES[i].answer };
+  renderAnswer(SAMPLES[i]);
+}
+
+function mapLive(q, d){
+  const g = d.guardrails||{};
+  const ans = esc(d.answer).replace(/\[Source:[^\]]*\]/gi, m=>`<span class="cite">${m}</span>`);
+  return {
+    q, answer: ans,
+    grounding: g.grounding_score ?? 0,
+    cited: !!g.has_citation,
+    idk: !!g.is_idk,
+    steps: d.steps ?? (d.tool_calls ? d.tool_calls.length : 0),
+    sources: (d.retrieved_contexts||[]).map((c,i)=>`context ${i+1} · ${esc(c).slice(0,38)}…`),
+    trace: (d.tool_calls||[]).map(t=>({
+      tool: esc(t.tool),
+      args: esc(typeof t.args==='string' ? t.args : JSON.stringify(t.args)),
+      res:  esc((t.result_preview||'').replace(/\s+/g,' ')).slice(0,70)+'…',
+    })),
+  };
+}
+
+function citeify(s){ return esc(s).replace(/\[Source:[^\]]*\]/gi, m=>`<span class="cite">${m}</span>`); }
+
+async function ask(){
+  const inp = document.getElementById('qinput');
+  const v = inp.value.trim(); if(!v) return;
+  inp.value='';
+  if(!LIVE.on){ currentQA={question:v, answer:SAMPLES[0].answer}; renderAnswer({...SAMPLES[0], q:v}); return; }
+  await askStream(v);
+}
+
+// Stream the answer from /query/stream and type it out as tokens arrive.
+async function askStream(q){
+  const thread = document.getElementById('thread');
+  thread.innerHTML =
+    `<div class="msg q"><div class="bubble">${esc(q)}</div></div>
+     <div class="msg a"><div class="bubble">
+       <div class="srcchips" id="streamSteps" style="color:var(--faint);font-size:12px;margin-bottom:8px"></div>
+       <div class="answer" id="streamAns" style="color:var(--muted)">Thinking…</div>
+     </div></div>`;
+  let answer = "", steps = [], done = null;
+  try{
+    const r = await fetch(LIVE.base+'/query/stream', {method:'POST', headers:headers(), body:JSON.stringify({question:q})});
+    if(!r.ok || !r.body) throw new Error('HTTP '+r.status);
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    while(true){
+      const {value, done:rdone} = await reader.read(); if(rdone) break;
+      buf += dec.decode(value, {stream:true});
+      let i;
+      while((i = buf.indexOf("\n\n")) >= 0){
+        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 2);
+        if(!line.startsWith("data:")) continue;
+        const ev = JSON.parse(line.slice(5).trim());
+        if(ev.type === "step"){
+          steps.push(ev);
+          document.getElementById('streamSteps').textContent = "⚙ " + steps.map(s=>s.tool).join(" → ");
+        } else if(ev.type === "token"){
+          answer += ev.text;
+          const el = document.getElementById('streamAns');
+          el.style.color = "var(--text)"; el.innerHTML = citeify(answer);
+        } else if(ev.type === "done"){ done = ev; }
+      }
+    }
+    currentQA = {question:q, answer};
+    renderAnswer(mapStream(q, answer, done, steps));
+    loadMetrics();
+  }catch(e){
+    const network = /fetch/i.test(e.message);
+    document.getElementById('thread').innerHTML +=
+      `<div class="msg a"><div class="bubble"><div class="answer" style="color:var(--text);line-height:1.6">${
+        network ? `Couldn't reach the live API — check it's running, CORS is set, and you're on http (not file://).`
+                : 'Request failed: '+esc(e.message)}</div></div></div>`;
+    setStatus(false);
+  }
+}
+
+function mapStream(q, answer, done, steps){
+  const g = (done && done.guardrails) || {};
+  return {
+    q, answer: citeify(answer),
+    grounding: g.grounding_score ?? 0, cited: !!g.has_citation, idk: !!g.is_idk,
+    steps: (done && done.steps) ?? steps.length,
+    sources: ((done && done.retrieved_contexts) || []).map((c,i)=>`context ${i+1} · ${esc(c).slice(0,38)}…`),
+    trace: steps.map(s=>({tool:esc(s.tool), args:esc(typeof s.args==='string'?s.args:JSON.stringify(s.args)), res:'(streamed)'})),
+  };
+}
+
+function vote(btn,kind){
+  document.querySelectorAll('.fb').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  const note = document.getElementById('fbnote');
+  note.classList.add('show');
+  note.style.color = 'var(--muted)';
+  if(LIVE.on){ sendFeedback(kind, note); return; }
+  note.textContent = kind==='up'
+    ? '✓ Logged to feedback.jsonl'
+    : '↳ Promoted to regression_cases.jsonl — this question now guards the drift gate';
+}
+
+async function sendFeedback(kind, note){
+  try{
+    const r = await fetch(LIVE.base+'/feedback',{method:'POST',headers:headers(),
+      body:JSON.stringify({question:currentQA.question, answer:currentQA.answer, rating:kind})});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    note.textContent = kind==='up'
+      ? `✓ Logged to feedback.jsonl (id ${d.id})`
+      : (d.promoted_to_regression ? '↳ Promoted to regression set — now guards the drift gate' : 'Recorded.');
+  }catch(e){ note.textContent='Feedback failed: '+esc(e.message); }
+}
+
+async function loadMetrics(){
+  try{
+    const r = await fetch(LIVE.base+'/metrics',{headers:headers()});
+    if(!r.ok) return;
+    const t = (await r.json()).traces||{};
+    if(!t.count) return;
+    const lat = t.latency_ms||{}, k = document.querySelectorAll('.kpi .v');
+    if(lat.p50!=null) k[0].innerHTML = Math.round(lat.p50)+'<small> ms</small>';
+    if(lat.p95!=null) k[1].innerHTML = Math.round(lat.p95)+'<small> ms</small>';
+    if(t.error_rate!=null) k[2].innerHTML = (t.error_rate*100).toFixed(1)+'<small> %</small>';
+    if(t.grounding_pass_rate!=null) k[3].innerHTML = Math.round(t.grounding_pass_rate*100)+'<small> %</small>';
+  }catch(e){}
+}
+
+document.getElementById('qinput').addEventListener('keydown',e=>{if(e.key==='Enter')ask();});
+
+defaultKB(); renderExamples(); renderMetrics(); renderAnswer(SAMPLES[0]); renderModels(DEMO_MODELS);
+connect();   // auto-connect to CONFIG.apiBase on load; falls back to demo data if unreachable
+</script>
+</body>
+</html>

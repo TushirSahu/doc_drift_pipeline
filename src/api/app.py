@@ -129,11 +129,21 @@ _SECURITY_HEADERS = {
 }
 
 
+# The demo pages (and /docs) are HTML that loads fonts + inline CSS/JS, which
+# default-src 'none' would blank out. HTML gets this pragmatic same-origin
+# policy; API JSON keeps the strict lockdown above.
+_HTML_CSP = ("default-src 'self' https: data: 'unsafe-inline'; "
+             "frame-ancestors 'none'; object-src 'none'")
+
+
 @app.middleware("http")
 async def _security_headers(request: Request, call_next):
     response = await call_next(request)
     if cfg("api", "security_headers", default=True):
+        is_html = response.headers.get("content-type", "").startswith("text/html")
         for k, v in _SECURITY_HEADERS.items():
+            if k == "Content-Security-Policy" and is_html:
+                v = _HTML_CSP
             response.headers.setdefault(k, v)
         # Don't advertise the server implementation/version.
         response.headers["Server"] = "DocDrift"
@@ -551,3 +561,14 @@ def feedback(req: FeedbackRequest) -> FeedbackResponse:
         rating=entry["rating"],
         promoted_to_regression=entry["promoted_to_regression"],
     )
+
+
+# ── Frontend ─────────────────────────────────────────────────────────────────
+# Serve the demo site from the API itself (one origin: landing at /, app at
+# /app.html). Mounted last so every explicit API route above wins; static files
+# are the fallback. Missing demo dir (e.g. a slim deploy) just means API-only.
+_DEMO_DIR = ROOT_DIR / "demo"
+if _DEMO_DIR.is_dir():
+    from fastapi.staticfiles import StaticFiles
+
+    app.mount("/", StaticFiles(directory=str(_DEMO_DIR), html=True), name="site")
