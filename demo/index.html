@@ -7,32 +7,32 @@
 <meta name="description" content="DocDrift is an LLMOps platform for documentation Q&A: agentic RAG with grounding guardrails, Ragas evaluation, and a CI drift gate that fails the build when answer quality regresses." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
   :root{
-    /* Deep navy base, soft blue as the single affirmative accent */
-    --bg:#0b1020; --panel:#111830; --panel-2:#0d1326; --inset:#151c36;
-    --line:#1e2745; --line-2:#293356; --line-3:#3a4573;
-    --text:#e6eaf5; --muted:#94a0bd; --faint:#5f6a88; --ghost:#3d4663;
-    --white:#ffffff; --chip:#141b33;
-    --accent:#60a5fa; --accent-2:#93c5fd;
+    /* Indigo-slate base; indigo = brand accent, cyan = data only */
+    --bg:#0a0d1c; --panel:#10152b; --panel-2:#0c1122; --inset:#141a33;
+    --line:#1d2440; --line-2:#283052; --line-3:#394370;
+    --text:#e8ebf7; --muted:#939cbd; --faint:#5d6787; --ghost:#3b4363;
+    --white:#ffffff; --chip:#131933;
+    --accent:#818cf8; --accent-2:#a5b4fc; --data:#22d3ee;
     --radius:14px; --radius-sm:9px;
     --mono:'JetBrains Mono',ui-monospace,'SF Mono','Cascadia Code',Menlo,Consolas,monospace;
     --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
-    --display:'Space Grotesk',var(--sans);
+    --display:'Bricolage Grotesque',var(--sans);
     --ease:cubic-bezier(.22,.61,.36,1);
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
   body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.5;
     -webkit-font-smoothing:antialiased;min-height:100dvh}
-  ::selection{background:#60a5fa;color:#071022}
+  ::selection{background:#818cf8;color:#0a0d1c}
   .wrap{max-width:1120px;margin:0 auto;padding:0 22px}
   .ic{width:15px;height:15px;flex:none;display:inline-block;vertical-align:-2px}
   a{color:inherit}
 
   /* ── Nav ── */
-  nav.top{position:sticky;top:0;z-index:50;background:rgba(11,16,32,.82);backdrop-filter:blur(12px);
+  nav.top{position:sticky;top:0;z-index:50;background:rgba(10,13,28,.82);backdrop-filter:blur(12px);
     border-bottom:1px solid var(--line)}
   .nav-in{display:flex;align-items:center;gap:20px;height:60px}
   .brand{display:flex;align-items:center;gap:11px;text-decoration:none}
@@ -56,11 +56,11 @@
   /* ── Hero ── */
   .hero{padding:92px 0 70px;text-align:center;position:relative;overflow:hidden}
   .hero::before{content:"";position:absolute;inset:-40% -20% auto;height:120%;pointer-events:none;
-    background:radial-gradient(ellipse 60% 50% at 50% 0%,rgba(96,165,250,.12),transparent 70%)}
+    background:radial-gradient(ellipse 60% 50% at 50% 0%,rgba(129,140,248,.12),transparent 70%)}
   .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;font-size:12px;
     font-weight:600;color:var(--muted);border:1px solid var(--line-2);background:var(--panel);margin-bottom:26px}
   .pill .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);
-    box-shadow:0 0 8px rgba(96,165,250,.6);animation:pulse 2.6s var(--ease) infinite}
+    box-shadow:0 0 8px rgba(129,140,248,.6);animation:pulse 2.6s var(--ease) infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
   h1{font-family:var(--display);font-size:clamp(34px,6vw,62px);font-weight:700;letter-spacing:-.035em;
     line-height:1.06;margin:0 auto 20px;max-width:820px;color:#fff}
@@ -81,7 +81,7 @@
 
   /* ── Sections ── */
   section{padding:76px 0}
-  .kicker{font-size:11px;text-transform:uppercase;letter-spacing:1.8px;color:var(--faint);font-weight:700;
+  .kicker{font-size:11px;text-transform:uppercase;letter-spacing:1.8px;color:var(--accent);font-weight:700;
     text-align:center;margin-bottom:12px}
   h2{font-family:var(--display);font-size:clamp(24px,3.6vw,36px);font-weight:700;letter-spacing:-.03em;
     text-align:center;margin:0 0 14px;color:#fff}
@@ -89,31 +89,36 @@
 
   /* Feature bento — hero cell (drift gate) + singles + wide strip */
   .feats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-  .feat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:22px;
-    transition:.2s var(--ease);display:flex;flex-direction:column}
+  .feat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:24px;
+    transition:.2s var(--ease);display:flex;flex-direction:column;position:relative;overflow:hidden}
+  .feat::before{content:"";position:absolute;inset:0 0 auto;height:1px;
+    background:linear-gradient(90deg,transparent,var(--line-3),transparent);opacity:0;transition:.2s}
   .feat:hover{border-color:var(--line-3);transform:translateY(-2px)}
-  .feat .fic{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:var(--chip);
-    border:1px solid var(--line-2);margin-bottom:16px;flex:none}
-  .feat .fic .ic{width:18px;height:18px;color:var(--accent)}
-  .feat h4{margin:0 0 8px;font-size:15.5px;font-weight:600;color:#fff;letter-spacing:-.01em}
-  .feat p{margin:0;font-size:13.5px;color:var(--muted);line-height:1.6}
-  .feat.hero{grid-column:1/3;grid-row:1/3;padding:28px;
-    background:linear-gradient(180deg,rgba(96,165,250,.07),var(--panel) 45%)}
-  .feat.hero h4{font-size:19px}
-  .feat.hero p{font-size:14.5px;max-width:400px}
+  .feat:hover::before{opacity:1}
+  .feat .fic{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+    background:rgba(129,140,248,.08);border:1px solid var(--line-2);margin-bottom:18px;flex:none}
+  .feat .fic .ic{width:19px;height:19px;color:var(--accent)}
+  .feat h4{margin:0 0 7px;font-family:var(--display);font-size:17px;font-weight:600;color:#fff;
+    letter-spacing:-.015em;line-height:1.25}
+  .feat p{margin:0;font-size:13.5px;color:var(--muted);line-height:1.65;letter-spacing:.05px}
+  .feat.hero{grid-column:1/3;grid-row:1/3;padding:30px;
+    background:linear-gradient(180deg,rgba(129,140,248,.08),var(--panel) 50%)}
+  .feat.hero::before{background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.55}
+  .feat.hero h4{font-size:22px;letter-spacing:-.02em}
+  .feat.hero p{font-size:14.5px;max-width:420px}
   .scores{margin-top:auto;padding-top:22px;display:flex;flex-direction:column;gap:11px}
   .score{display:grid;grid-template-columns:130px 1fr 44px;align-items:center;gap:12px;
     font-family:var(--mono);font-size:11.5px;color:var(--muted)}
   .score .bar{height:6px;border-radius:99px;background:var(--inset);overflow:hidden}
   .score .bar i{display:block;height:100%;border-radius:99px;
-    background:linear-gradient(90deg,var(--accent-2),var(--accent))}
+    background:linear-gradient(90deg,var(--accent),var(--data))}
   .score b{color:#fff;font-weight:500;text-align:right}
   .feat.wide{grid-column:1/5;flex-direction:row;align-items:center;gap:20px;padding:20px 24px}
   .feat.wide .fic{margin:0}
   .feat.wide .fw-txt{flex:1;min-width:200px}
   .feat.wide h4{margin-bottom:4px}
   .feat.wide .chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-  .feat.wide .chips span{font-family:var(--mono);font-size:11px;color:var(--muted);
+  .feat.wide .chips span{font-family:var(--mono);font-size:11px;color:var(--data);
     background:var(--chip);border:1px solid var(--line-2);border-radius:7px;padding:6px 10px;white-space:nowrap}
   @media(max-width:900px){
     .feats{grid-template-columns:1fr}
@@ -136,7 +141,7 @@
   .step .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
     padding:15px 14px 16px;flex:1;transition:.2s var(--ease)}
   .step:hover .card{border-color:var(--line-3);transform:translateY(-2px)}
-  .step:hover .node{border-color:var(--accent);box-shadow:0 0 0 4px rgba(96,165,250,.1)}
+  .step:hover .node{border-color:var(--accent);box-shadow:0 0 0 4px rgba(129,140,248,.1)}
   .step .k{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;color:var(--faint);margin:0 0 7px}
   .step .t{font-size:14px;font-weight:600;color:#fff;margin:0 0 6px}
   .step .d{font-size:12.5px;color:var(--muted);line-height:1.55;margin:0}
@@ -144,7 +149,7 @@
   .step.gate .node{background:var(--accent);border-color:var(--accent)}
   .step.gate .node .ic{color:#000}
   .step.gate .card{border-color:var(--line-3);
-    background:linear-gradient(180deg,rgba(96,165,250,.09),var(--panel) 55%)}
+    background:linear-gradient(180deg,rgba(129,140,248,.09),var(--panel) 55%)}
   .step .arrow{display:none}
   @media(max-width:900px){
     .steps{grid-template-columns:1fr;gap:10px;max-width:480px;margin:0 auto}
@@ -164,7 +169,7 @@
   .term .bar .tl{margin-left:8px;font-family:var(--mono);font-size:11px;color:var(--faint)}
   .term pre{margin:0;padding:20px;font-family:var(--mono);font-size:12.5px;line-height:1.8;color:var(--muted);
     overflow-x:auto}
-  .term .ok{color:#fff;font-weight:600}
+  .term .ok{color:var(--data);font-weight:600}
   .term .cm{color:var(--ghost)}
 
   /* Stack strip */
@@ -176,7 +181,7 @@
   .band{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel-2);
     padding:56px 30px;text-align:center;position:relative;overflow:hidden}
   .band::before{content:"";position:absolute;inset:auto -20% -80%;height:120%;pointer-events:none;
-    background:radial-gradient(ellipse 60% 50% at 50% 100%,rgba(96,165,250,.06),transparent 70%)}
+    background:radial-gradient(ellipse 60% 50% at 50% 100%,rgba(129,140,248,.06),transparent 70%)}
 
   /* Footer */
   footer{border-top:1px solid var(--line);padding:36px 0;margin-top:20px}
