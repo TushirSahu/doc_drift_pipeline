@@ -7,7 +7,7 @@
 <meta name="description" content="DocDrift is an LLMOps platform for documentation Q&A: agentic RAG with grounding guardrails, Ragas evaluation, and a CI drift gate that fails the build when answer quality regresses." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
   :root{
     /* Indigo-slate base; indigo = brand accent, cyan = data only */
@@ -19,7 +19,7 @@
     --radius:14px; --radius-sm:9px;
     --mono:'JetBrains Mono',ui-monospace,'SF Mono','Cascadia Code',Menlo,Consolas,monospace;
     --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
-    --display:'Bricolage Grotesque',var(--sans);
+    --display:'Sora',var(--sans);
     --ease:cubic-bezier(.22,.61,.36,1);
   }
   *{box-sizing:border-box}
@@ -106,13 +106,16 @@
   .feat.hero::before{background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.55}
   .feat.hero h4{font-size:22px;letter-spacing:-.02em}
   .feat.hero p{font-size:14.5px;max-width:420px}
-  .scores{margin-top:auto;padding-top:22px;display:flex;flex-direction:column;gap:11px}
-  .score{display:grid;grid-template-columns:130px 1fr 44px;align-items:center;gap:12px;
-    font-family:var(--mono);font-size:11.5px;color:var(--muted)}
-  .score .bar{height:6px;border-radius:99px;background:var(--inset);overflow:hidden}
-  .score .bar i{display:block;height:100%;border-radius:99px;
-    background:linear-gradient(90deg,var(--accent),var(--data))}
-  .score b{color:#fff;font-weight:500;text-align:right}
+  /* Gate verdict readout — echoes the CI terminal below */
+  .verdict{margin-top:auto;background:var(--inset);border:1px solid var(--line);
+    border-radius:var(--radius-sm);padding:14px 16px;font-family:var(--mono);font-size:12px}
+  .verdict .vrow{display:flex;align-items:baseline;gap:10px;padding:4px 0;color:var(--muted)}
+  .verdict .vrow .dots{flex:1;border-bottom:1px dotted var(--line-3);transform:translateY(-3px)}
+  .verdict .vrow b{color:var(--text);font-weight:500}
+  .verdict .vrow .pass{color:var(--data);font-weight:500}
+  .verdict .vsum{margin-top:8px;padding-top:10px;border-top:1px solid var(--line);
+    color:var(--data);font-weight:500}
+  .verdict .vsum span{color:var(--faint);font-weight:400}
   .feat.wide{grid-column:1/5;flex-direction:row;align-items:center;gap:20px;padding:20px 24px}
   .feat.wide .fic{margin:0}
   .feat.wide .fw-txt{flex:1;min-width:200px}
@@ -245,10 +248,11 @@
         <div class="fic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
         <h4>Drift gate in CI</h4>
         <p>Ragas scores every doc, prompt, or config change against a committed baseline. Quality drops below threshold? The build fails before users notice.</p>
-        <div class="scores" aria-hidden="true">
-          <div class="score"><span>faithfulness</span><div class="bar"><i style="width:91%"></i></div><b>0.91</b></div>
-          <div class="score"><span>answer_relevancy</span><div class="bar"><i style="width:88%"></i></div><b>0.88</b></div>
-          <div class="score"><span>answer_correctness</span><div class="bar"><i style="width:84%"></i></div><b>0.84</b></div>
+        <div class="verdict" aria-hidden="true">
+          <div class="vrow"><span>faithfulness</span><span class="dots"></span><b>0.91</b><span class="pass">PASS</span></div>
+          <div class="vrow"><span>answer_relevancy</span><span class="dots"></span><b>0.88</b><span class="pass">PASS</span></div>
+          <div class="vrow"><span>answer_correctness</span><span class="dots"></span><b>0.84</b><span class="pass">PASS</span></div>
+          <div class="vsum">✓ drift check passed <span>— baseline unchanged, deploy continues</span></div>
         </div>
       </div>
       <div class="feat">
