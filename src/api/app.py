@@ -161,6 +161,24 @@ def _acquire_query_slot() -> None:
         )
 
 
+# Behind a reverse proxy (HF Spaces, a load balancer) request.client.host is the
+# proxy's IP — the same for every user, so the per-IP limit collapses to one
+# shared bucket. When DOCDRIFT_TRUST_PROXY is set, read the real client from
+# X-Forwarded-For instead. Default off: trusting XFF on a naked deploy lets a
+# client spoof the header and dodge the limit.
+_TRUST_PROXY = _env_flag("DOCDRIFT_TRUST_PROXY", False)
+
+
+def _client_ip(request) -> str:
+    if _TRUST_PROXY:
+        xff = request.headers.get("x-forwarded-for")
+        if xff:
+            # Rightmost entry is the one our trusted proxy appended; a client can
+            # only prepend fake entries on the left, so it can't spoof this.
+            return xff.split(",")[-1].strip()
+    return request.client.host if request.client else "unknown"
+
+
 def _inprocess_rate_limited(ip: str, limit: int, now: float):
     """Sliding-window per-IP limiter in this process. (blocked, retry_after)."""
     hits = _RL.get(ip)
@@ -192,13 +210,11 @@ def _redis_rate_limited(ip: str, limit: int):
         return True, max(1, ttl if isinstance(ttl, int) and ttl > 0 else 60)
     return False, 0
 
-
-
 @app.middleware("http")
 async def _rate_limit(request, call_next):
     limit = cfg("api", "rate_limit_per_min", default=0)
     if limit and request.url.path != "/health":
-        ip = request.client.host if request.client else "unknown"
+        ip = _client_ip(request)
         blocked, retry_after, done = False, 0, False
         if redis_client.redis_enabled():
             try:
