@@ -76,3 +76,37 @@ def test_middleware_falls_back_when_redis_errors(monkeypatch):
         codes = [client.get("/metrics").status_code for _ in range(4)]
     assert 429 in codes                 # still limited via the in-process fallback
     assert len(app_module._RL) == 1     # fallback path did the counting
+
+
+class _PingOK:
+    def ping(self):
+        return True
+
+
+class _PingBad:
+    def ping(self):
+        raise RuntimeError("redis down")
+
+
+def test_health_omits_redis_when_disabled(monkeypatch):
+    monkeypatch.setattr(redis_client, "redis_enabled", lambda: False)
+    with TestClient(app) as client:
+        checks = client.get("/health").json()["checks"]
+    assert "redis" not in checks
+
+
+def test_health_reports_redis_ok(monkeypatch):
+    monkeypatch.setattr(redis_client, "redis_enabled", lambda: True)
+    monkeypatch.setattr(redis_client, "get_redis", lambda: _PingOK())
+    with TestClient(app) as client:
+        checks = client.get("/health").json()["checks"]
+    assert checks["redis"] == "ok"
+
+
+def test_health_redis_unreachable_is_degraded(monkeypatch):
+    monkeypatch.setattr(redis_client, "redis_enabled", lambda: True)
+    monkeypatch.setattr(redis_client, "get_redis", lambda: _PingBad())
+    with TestClient(app) as client:
+        body = client.get("/health").json()
+    assert body["checks"]["redis"].startswith("unreachable")
+    assert body["status"] == "degraded"

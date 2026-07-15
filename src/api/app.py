@@ -191,7 +191,7 @@ def _redis_rate_limited(ip: str, limit: int):
         ttl = r.ttl(key)
         return True, max(1, ttl if isinstance(ttl, int) and ttl > 0 else 60)
     return False, 0
-    # ponytail: fixed-window; sliding-window-log if boundary bursts matter.
+
 
 
 @app.middleware("http")
@@ -308,6 +308,15 @@ def health() -> HealthResponse:
         checks["qdrant"] = "ok"
     except Exception as exc:  # noqa: BLE001
         checks["qdrant"] = f"unreachable: {type(exc).__name__}"
+
+    # Redis only matters when configured (shared rate limiter). Probe it so a bad
+    # REDIS_URL surfaces as degraded instead of silently degrading to in-process.
+    if redis_client.redis_enabled():
+        try:
+            redis_client.get_redis().ping()
+            checks["redis"] = "ok"
+        except Exception as exc:  # noqa: BLE001
+            checks["redis"] = f"unreachable: {type(exc).__name__}"
 
     healthy = all(v == "ok" for v in checks.values())
     return HealthResponse(status="ok" if healthy else "degraded", checks=checks)
