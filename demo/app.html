@@ -10,12 +10,13 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
   :root{
-    /* Black-dominant monochrome — white is the single affirmative accent */
-    --bg:#000000; --panel:#0a0a0a; --panel-2:#070707; --inset:#0d0d0d;
-    --line:#1c1c1c; --line-2:#282828; --line-3:#3a3a3a;
-    --text:#ededed; --muted:#8f8f8f; --faint:#5a5a5a; --ghost:#3a3a3a;
+    /* Warm charcoal, amber as the single affirmative accent */
+    --bg:#0c0a08; --panel:#14110d; --panel-2:#0f0d0a; --inset:#171310;
+    --line:#292219; --line-2:#362c1e; --line-3:#4a3c29;
+    --text:#f0ece5; --muted:#a2988a; --faint:#6b6153; --ghost:#473e32;
     --white:#ffffff;
-    --chip:#111111;
+    --chip:#1a1611;
+    --accent:#f5a623; --accent-2:#ff8c42;
     --radius:14px; --radius-sm:9px;
     --mono:'JetBrains Mono',ui-monospace,'SF Mono','Cascadia Code',Menlo,Consolas,monospace;
     --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
@@ -30,13 +31,13 @@
   }
   .wrap{max-width:1200px;margin:0 auto;padding:26px 22px 48px}
   .ic{width:15px;height:15px;flex:none;display:inline-block;vertical-align:-2px}
-  ::selection{background:#fff;color:#000}
+  ::selection{background:#f5a623;color:#1a1104}
 
   /* ── Masthead ───────────────────────────────────────────── */
   .top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:22px}
   .brand{display:flex;align-items:center;gap:13px;min-width:0}
   .mark{width:42px;height:42px;border-radius:12px;flex:none;display:grid;place-items:center;
-    color:#000;background:var(--white);border:1px solid var(--white)}
+    color:#000;background:var(--accent);border:1px solid var(--accent)}
   .mark .ic{width:23px;height:23px}
   .brand .name{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:-.03em;line-height:1;color:#fff}
   .brand .sub{color:var(--muted);font-size:12.5px;margin-top:5px;letter-spacing:.1px}
@@ -45,16 +46,16 @@
     font-size:12px;font-weight:600;border:1px solid var(--line-2);background:var(--panel);color:var(--muted);
     font-family:inherit;transition:.15s var(--ease)}
   .status:hover{border-color:var(--line-3);color:var(--text)}
-  .status:focus-visible{outline:2px solid var(--white);outline-offset:2px}
+  .status:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .status .dot{width:7px;height:7px;border-radius:50%;background:var(--faint)}
   .status.live{color:#fff;border-color:var(--line-3)}
-  .status.live .dot{background:var(--white);box-shadow:0 0 0 3px rgba(255,255,255,.08),0 0 10px rgba(255,255,255,.5);animation:pulse 2.6s var(--ease) infinite}
+  .status.live .dot{background:var(--accent);box-shadow:0 0 0 3px rgba(245,166,35,.15),0 0 10px rgba(245,166,35,.55);animation:pulse 2.6s var(--ease) infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
   .ghostlink{display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border-radius:999px;
     font-size:12.5px;font-weight:600;color:var(--muted);text-decoration:none;
     border:1px solid var(--line-2);background:var(--panel);transition:.15s var(--ease)}
   .ghostlink:hover{color:#fff;border-color:var(--line-3)}
-  .ghostlink:focus-visible{outline:2px solid var(--white);outline-offset:2px}
+  .ghostlink:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
   /* ── Pipeline spine (signature: numbered 01–05) ─────────── */
   .pipe{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin:0 0 22px;
@@ -65,7 +66,7 @@
     font-feature-settings:"tnum"}
   .stage .txt{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;font-weight:600}
   .stage .txt .ic{color:var(--faint)}
-  .stage.last{background:var(--white)}
+  .stage.last{background:var(--accent)}
   .stage.last .num{color:#000}
   .stage.last .txt{color:#000}
   .stage.last .txt .ic{color:#000}
@@ -101,8 +102,8 @@
   .ex{cursor:pointer;font-size:12.5px;padding:8px 13px;border-radius:999px;border:1px solid var(--line-2);
     background:var(--panel-2);color:var(--muted);transition:.18s var(--ease);font-family:inherit}
   .ex:hover{color:var(--text);border-color:var(--line-3);transform:translateY(-1px)}
-  .ex.active{color:#000;background:var(--white);border-color:var(--white);font-weight:600}
-  .ex:focus-visible{outline:2px solid var(--white);outline-offset:2px}
+  .ex.active{color:#000;background:var(--accent);border-color:var(--accent);font-weight:600}
+  .ex:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
   /* Chat thread */
   .msg{margin-bottom:14px;animation:rise .32s var(--ease) both}
@@ -113,7 +114,7 @@
   .a .bubble{background:var(--panel-2);border:1px solid var(--line);border-radius:16px 16px 16px 5px;padding:17px;max-width:94%}
   .answer{font-size:15px;line-height:1.65;color:var(--text)}
   .answer b{color:#fff;font-weight:600}
-  .cite{color:#fff;font-weight:600;text-decoration:underline;text-decoration-color:var(--line-3);text-underline-offset:3px}
+  .cite{color:var(--accent);font-weight:600;text-decoration:underline;text-decoration-color:var(--line-3);text-underline-offset:3px}
 
   .badges{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px}
   .badge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;
@@ -147,8 +148,8 @@
   .fb{cursor:pointer;display:inline-grid;place-items:center;border:1px solid var(--line-2);background:var(--panel-2);
     color:var(--muted);border-radius:9px;width:34px;height:32px;transition:.15s var(--ease)}
   .fb:hover{color:var(--text);border-color:var(--line-3)}
-  .fb:focus-visible{outline:2px solid var(--white);outline-offset:2px}
-  .fb.up.on{color:#000;border-color:var(--white);background:var(--white)}
+  .fb:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .fb.up.on{color:#000;border-color:var(--accent);background:var(--accent)}
   .fb.down.on{color:var(--text);border-color:var(--line-3);background:var(--chip)}
   .fbnote{font-size:12px;color:var(--muted);margin-top:10px;display:none;line-height:1.5}
   .fbnote.show{display:block}
@@ -157,12 +158,12 @@
   .inputbar input{flex:1;background:var(--inset);border:1px solid var(--line-2);border-radius:11px;
     padding:12px 14px;color:var(--text);font-size:14px;font-family:var(--sans);transition:border-color .15s,box-shadow .15s}
   .inputbar input::placeholder{color:var(--faint)}
-  .inputbar input:focus{outline:none;border-color:var(--line-3);box-shadow:0 0 0 3px rgba(255,255,255,.06)}
-  .inputbar button{display:inline-flex;align-items:center;gap:7px;background:var(--white);
-    border:1px solid var(--white);color:#000;font-weight:700;border-radius:11px;padding:0 18px;cursor:pointer;font-size:14px;transition:.15s var(--ease)}
+  .inputbar input:focus{outline:none;border-color:var(--line-3);box-shadow:0 0 0 3px rgba(245,166,35,.12)}
+  .inputbar button{display:inline-flex;align-items:center;gap:7px;background:var(--accent);
+    border:1px solid var(--accent);color:#000;font-weight:700;border-radius:11px;padding:0 18px;cursor:pointer;font-size:14px;transition:.15s var(--ease)}
   .inputbar button:hover{background:#e2e2e2}
   .inputbar button:active{transform:translateY(1px)}
-  .inputbar button:focus-visible{outline:2px solid var(--white);outline-offset:2px}
+  .inputbar button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
   /* Metrics */
   .kpis{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:20px}
@@ -187,7 +188,7 @@
   .gate{display:flex;align-items:center;gap:13px;margin-top:16px;padding:15px;border-radius:14px;
     background:var(--panel-2);border:1px solid var(--line-3)}
   .gate .gi{width:38px;height:38px;flex:none;border-radius:11px;display:grid;place-items:center;color:#000;
-    background:var(--white);border:1px solid var(--white)}
+    background:var(--accent);border:1px solid var(--accent)}
   .gate .gi .ic{width:20px;height:20px}
   .gate .big{font-weight:700;color:#fff;font-size:14.5px}
   .gate .sub{font-size:12px;color:var(--muted);margin-top:2px}
@@ -216,7 +217,7 @@
     border:1px solid var(--line-2);padding:3px 7px;border-radius:6px;max-width:100%;overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap}
   .mserve{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;
-    letter-spacing:.6px;text-transform:uppercase;color:#000;background:var(--white);padding:4px 9px;border-radius:999px}
+    letter-spacing:.6px;text-transform:uppercase;color:#000;background:var(--accent);padding:4px 9px;border-radius:999px}
   .mserve .ic{width:11px;height:11px}
   .mscore{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:6px}
   .mscore .nm{color:var(--muted)}
