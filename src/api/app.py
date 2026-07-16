@@ -86,7 +86,7 @@ def _env_flag(name: str, default: bool) -> bool:
 
 # Interactive API docs expose the full endpoint/schema surface. Fine for a demo,
 # but a hardened deployment can hide them with DOCDRIFT_EXPOSE_DOCS=0.
-_EXPOSE_DOCS = _env_flag("DOCDRIFT_EXPOSE_DOCS", True)
+_EXPOSE_DOCS = _env_flag("DOCDRIFT_EXPOSE_DOCS", False)
 
 app = FastAPI(
     title="DocDrift API",
