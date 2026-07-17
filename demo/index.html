@@ -190,7 +190,75 @@
   .foot .fl{color:var(--faint);font-size:12.5px}
   .foot a{color:var(--muted);font-size:12.5px;text-decoration:none}
   .foot a:hover{color:#fff}
+
+  /* ── Scroll reveal ── */
+  .reveal{opacity:0;transform:translateY(18px);
+    transition:opacity .6s var(--ease),transform .6s var(--ease)}
+  .reveal.in{opacity:1;transform:none}
+  .feats.reveal .feat,.steps.reveal .step{opacity:0;transform:translateY(14px);
+    transition:opacity .5s var(--ease),transform .5s var(--ease)}
+  .feats.reveal.in .feat,.steps.reveal.in .step{opacity:1;transform:none}
+  .feats.reveal.in .feat:nth-child(2){transition-delay:.06s}
+  .feats.reveal.in .feat:nth-child(3){transition-delay:.12s}
+  .feats.reveal.in .feat:nth-child(4){transition-delay:.18s}
+  .feats.reveal.in .feat:nth-child(5){transition-delay:.24s}
+  .feats.reveal.in .feat:nth-child(6){transition-delay:.30s}
+  .steps.reveal.in .step:nth-child(2){transition-delay:.08s}
+  .steps.reveal.in .step:nth-child(3){transition-delay:.16s}
+  .steps.reveal.in .step:nth-child(4){transition-delay:.24s}
+  .steps.reveal.in .step:nth-child(5){transition-delay:.32s}
+
+  /* ── Docs (tabbed) ── */
+  .docs{border:1px solid var(--line);border-radius:calc(var(--radius) + 4px);
+    background:var(--panel-2);overflow:hidden}
+  .doctabs{display:flex;gap:4px;padding:8px;border-bottom:1px solid var(--line);
+    background:var(--panel);flex-wrap:wrap}
+  .doctab{appearance:none;font-family:inherit;font-size:13px;font-weight:600;color:var(--muted);
+    background:transparent;border:0;border-radius:9px;padding:9px 15px;min-height:40px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:8px;transition:.15s var(--ease)}
+  .doctab .ic{width:15px;height:15px}
+  .doctab:hover{color:var(--text);background:var(--chip)}
+  .doctab[aria-selected="true"]{color:#fff;background:var(--chip);box-shadow:inset 0 0 0 1px var(--line-3)}
+  .doctab[aria-selected="true"] .ic{color:var(--accent)}
+  .doctab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .docpanel{padding:26px 28px}
+  .docpanel[hidden]{display:none}
+  .docpanel:not([hidden]){animation:panelin .32s var(--ease)}
+  @keyframes panelin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .docpanel h3{font-family:var(--display);font-size:16px;font-weight:600;color:#fff;
+    margin:0 0 6px;letter-spacing:-.01em}
+  .docpanel h3:not(:first-child){margin-top:26px}
+  .docpanel .lead{color:var(--muted);font-size:14px;line-height:1.65;margin:0 0 8px;max-width:660px}
+  .docpanel .step-n{display:flex;gap:12px;align-items:baseline;margin-top:16px}
+  .docpanel .step-n .i{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent);
+    border:1px solid var(--line-2);border-radius:7px;padding:3px 8px;flex:none}
+  .docpanel .step-n .h{font-size:14px;color:var(--text);font-weight:600}
+  .code{position:relative;background:var(--bg);border:1px solid var(--line);
+    border-radius:var(--radius-sm);margin:10px 0}
+  .code pre{margin:0;padding:15px 18px;font-family:var(--mono);font-size:12.5px;line-height:1.8;
+    color:var(--text);overflow-x:auto}
+  .code .cm{color:var(--faint)}
+  .code .cy{color:var(--data)}
+  .copy{position:absolute;top:8px;right:8px;font-family:var(--sans);font-size:11px;font-weight:600;
+    color:var(--muted);background:var(--panel);border:1px solid var(--line-2);border-radius:7px;
+    padding:6px 10px;min-height:32px;cursor:pointer;transition:.15s var(--ease)}
+  .copy:hover{color:#fff;border-color:var(--line-3)}
+  .copy:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .copy.done{color:var(--data);border-color:var(--line-3)}
+  .envt{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0 4px}
+  .envt td{padding:10px 12px;border-top:1px solid var(--line);vertical-align:top;color:var(--muted);line-height:1.5}
+  .envt tr:first-child td{border-top:0}
+  .envt td:first-child{font-family:var(--mono);font-size:12px;color:var(--data);white-space:nowrap}
+  @media(max-width:600px){.envt,.envt tbody,.envt tr,.envt td{display:block;width:100%}
+    .envt td{border-top:0;padding:2px 0}.envt tr{border-top:1px solid var(--line);padding:10px 0}}
+
+  @media(prefers-reduced-motion:reduce){
+    *,.reveal,.feats.reveal .feat,.steps.reveal .step{
+      animation:none !important;transition:none !important;opacity:1 !important;transform:none !important}
+    html{scroll-behavior:auto}
+  }
 </style>
+<noscript><style>.reveal,.feats.reveal .feat,.steps.reveal .step{opacity:1;transform:none}</style></noscript>
 </head>
 <body>
 
@@ -205,6 +273,7 @@
     <div class="navlinks">
       <a href="#features">Features</a>
       <a href="#how">How it works</a>
+      <a href="#docs">Docs</a>
       <a href="#stack">Stack</a>
     </div>
     <div class="spacer"></div>
@@ -241,7 +310,7 @@
     <div class="kicker">Platform</div>
     <h2>Everything between your docs and a trusted answer</h2>
     <p class="sub">A serving path with production safeguards, and a quality gate that treats answer quality like a test suite.</p>
-    <div class="feats">
+    <div class="feats reveal">
       <div class="feat lead">
         <div class="fic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
         <h4>Drift gate in CI</h4>
@@ -291,7 +360,7 @@
     <div class="kicker">Pipeline</div>
     <h2>From markdown to a gated deploy</h2>
     <p class="sub">Five stages. The last one is the point: quality regressions never reach production silently.</p>
-    <div class="steps">
+    <div class="steps reveal">
       <div class="step">
         <div class="node"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
         <div class="card"><p class="k">01</p><p class="t">Ingest</p><p class="d">Markdown chunked, embedded, indexed in Qdrant.</p></div>
@@ -334,7 +403,7 @@ answer_correctness 0.84   <span class="ok">✓</span>
     <div class="kicker">Stack</div>
     <h2>Boring where it should be, sharp where it counts</h2>
     <p class="sub">Python service with pluggable model providers — local Ollama to any OpenAI-compatible endpoint — and optional Postgres/Redis/Qdrant Cloud for stateless deploys.</p>
-    <div class="stack">
+    <div class="stack reveal">
       <span class="tech">FastAPI</span><span class="tech">Qdrant</span><span class="tech">Ragas</span>
       <span class="tech">Ollama</span><span class="tech">HF Inference</span><span class="tech">Postgres</span>
       <span class="tech">Redis</span><span class="tech">BM25</span><span class="tech">Pydantic</span>
@@ -343,9 +412,81 @@ answer_correctness 0.84   <span class="ok">✓</span>
   </div>
 </section>
 
+<section id="docs" style="padding-top:0">
+  <div class="wrap">
+    <div class="kicker">Docs</div>
+    <h2>Up and running in three commands</h2>
+    <p class="sub">Ingest your markdown, ask a question, or call the API. Everything runs locally with zero cloud setup.</p>
+
+    <div class="docs reveal">
+      <div class="doctabs" role="tablist" aria-label="Documentation">
+        <button class="doctab" role="tab" aria-selected="true" aria-controls="d-quick" id="t-quick">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m13 2-3 8h6l-3 8"/></svg> Quickstart</button>
+        <button class="doctab" role="tab" aria-selected="false" aria-controls="d-api" id="t-api" tabindex="-1">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m8 6-6 6 6 6"/><path d="m16 6 6 6-6 6"/></svg> API</button>
+        <button class="doctab" role="tab" aria-selected="false" aria-controls="d-deploy" id="t-deploy" tabindex="-1">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg> Deploy</button>
+      </div>
+
+      <div class="docpanel" id="d-quick" role="tabpanel" aria-labelledby="t-quick">
+        <p class="lead">Point DocDrift at a folder of markdown, then ask questions grounded in it — from the CLI or the browser.</p>
+        <div class="step-n"><span class="i">1</span><span class="h">Install &amp; configure</span></div>
+        <div class="code"><button class="copy" type="button">Copy</button><pre><span class="cm"># Python 3.11</span>
+pip install -r requirements.txt
+cp .env.example .env</pre></div>
+        <div class="step-n"><span class="i">2</span><span class="h">Ingest your docs</span></div>
+        <div class="code"><button class="copy" type="button">Copy</button><pre>python -m src.ingestion.cli --all</pre></div>
+        <div class="step-n"><span class="i">3</span><span class="h">Ask a question</span></div>
+        <div class="code"><button class="copy" type="button">Copy</button><pre>python -m src.agentic.cli <span class="cy">"How long do auth tokens last?"</span></pre></div>
+        <h3>Prefer the browser?</h3>
+        <p class="lead">Run the service and open the playground — same pipeline, live.</p>
+        <div class="code"><button class="copy" type="button">Copy</button><pre>uvicorn src.api.app:app --port 8000   <span class="cm"># then open http://localhost:8000</span></pre></div>
+      </div>
+
+      <div class="docpanel" id="d-api" role="tabpanel" aria-labelledby="t-api" hidden>
+        <p class="lead">Every answer flows through agentic retrieval, guardrails, and the citation audit. Ask over HTTP:</p>
+        <div class="code"><button class="copy" type="button">Copy</button><pre>curl -s http://localhost:8000/query \
+  -H <span class="cy">"Content-Type: application/json"</span> \
+  -d <span class="cy">'{"question": "What auth does v2 use?"}'</span></pre></div>
+        <h3>Response</h3>
+        <div class="code"><button class="copy" type="button">Copy</button><pre>{
+  <span class="cy">"answer"</span>: "Auth v2 uses OAuth2 + JWT. [Source: auth_service_v2.md]",
+  <span class="cy">"guardrails"</span>: { "grounded": true, "has_citation": true },
+  <span class="cy">"citation_audit"</span>: { "verdict": "accurate" },
+  <span class="cy">"tools_used"</span>: ["search_docs"]
+}</pre></div>
+        <h3>Endpoints</h3>
+        <table class="envt"><tbody>
+          <tr><td>POST /query</td><td>Ask a question — answer, guardrail verdict, citation audit, trace.</td></tr>
+          <tr><td>POST /query/stream</td><td>Same, streamed as Server-Sent Events (step → token → done).</td></tr>
+          <tr><td>GET /eval</td><td>Latest Ragas scores vs the committed drift baseline.</td></tr>
+          <tr><td>GET /models</td><td>Multi-LLM benchmark: champion + every model's scores.</td></tr>
+          <tr><td>GET /metrics</td><td>Aggregate latency, error rate, guardrail pass-rate, cache hits.</td></tr>
+          <tr><td>GET /health</td><td>Liveness + dependency checks (Qdrant, Redis, config).</td></tr>
+        </tbody></table>
+        <p class="lead" style="margin-top:14px">Set <b style="color:var(--data);font-family:var(--mono);font-size:12px">DOCDRIFT_API_KEY</b> to require an <b style="color:var(--data);font-family:var(--mono);font-size:12px">X-API-Key</b> header on every route but <span style="color:var(--mono)">/health</span>.</p>
+      </div>
+
+      <div class="docpanel" id="d-deploy" role="tabpanel" aria-labelledby="t-deploy" hidden>
+        <p class="lead">One rule for every backend: <b>env var set → external &amp; durable; unset → local fallback.</b> The app is stateless-safe and scales horizontally with these three.</p>
+        <table class="envt"><tbody>
+          <tr><td>QDRANT_URL<br/>QDRANT_API_KEY</td><td>Vector store. Cloud Qdrant persists across restarts; unset uses a local path.</td></tr>
+          <tr><td>DATABASE_URL</td><td>Postgres — durable traces, benchmark results, ingest state, feedback.</td></tr>
+          <tr><td>REDIS_URL</td><td>Shared rate-limit counter across instances (behind a load balancer).</td></tr>
+          <tr><td>OPENAI_BASE_URL<br/>OPENAI_API_KEY</td><td>Any OpenAI-compatible LLM — HF router, a local vLLM, or Ollama.</td></tr>
+          <tr><td>DOCDRIFT_API_KEY</td><td>API auth. Unset = open dev mode; set = X-API-Key required.</td></tr>
+        </tbody></table>
+        <h3>Full stack in one command</h3>
+        <div class="code"><button class="copy" type="button">Copy</button><pre>docker compose up -d   <span class="cm"># api + Qdrant + Ollama</span></pre></div>
+        <p class="lead" style="margin-top:14px">CI runs the drift gate on every push that touches docs, prompts, or config — a regression fails the build before it ships.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section style="padding-top:0">
   <div class="wrap">
-    <div class="band">
+    <div class="band reveal">
       <h2 style="margin-bottom:10px">Ask your docs something.</h2>
       <p class="sub" style="margin-bottom:30px">The live playground runs the full pipeline — retrieval, guardrails, citations, and the current champion model.</p>
       <div class="cta">
@@ -362,9 +503,59 @@ answer_correctness 0.84   <span class="ok">✓</span>
     <span class="spacer"></span>
     <a href="app.html">App</a>
     <a href="#features">Features</a>
+    <a href="#docs">Docs</a>
     <a href="https://github.com/TushirSahu/doc_drift_pipeline" target="_blank" rel="noopener">GitHub</a>
   </div>
 </footer>
+
+<script>
+(function(){
+  // Reveal on scroll (skipped entirely when the user prefers reduced motion).
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var els = [].slice.call(document.querySelectorAll('.reveal'));
+  if (reduce || !('IntersectionObserver' in window)) {
+    els.forEach(function(el){ el.classList.add('in'); });
+  } else {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    els.forEach(function(el){ io.observe(el); });
+  }
+
+  // Docs tabs
+  var tabs = [].slice.call(document.querySelectorAll('.doctab'));
+  function select(tab){
+    tabs.forEach(function(t){
+      var on = t === tab;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+    });
+  }
+  tabs.forEach(function(tab, i){
+    tab.addEventListener('click', function(){ select(tab); });
+    tab.addEventListener('keydown', function(ev){
+      var n = null;
+      if (ev.key === 'ArrowRight') n = tabs[(i+1) % tabs.length];
+      else if (ev.key === 'ArrowLeft') n = tabs[(i-1+tabs.length) % tabs.length];
+      if (n){ ev.preventDefault(); select(n); n.focus(); }
+    });
+  });
+
+  // Copy buttons
+  document.querySelectorAll('.copy').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var code = btn.parentElement.querySelector('pre').innerText;
+      navigator.clipboard.writeText(code).then(function(){
+        btn.textContent = 'Copied'; btn.classList.add('done');
+        setTimeout(function(){ btn.textContent = 'Copy'; btn.classList.remove('done'); }, 1600);
+      });
+    });
+  });
+})();
+</script>
 
 </body>
 </html>
